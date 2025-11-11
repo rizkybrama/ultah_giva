@@ -45,6 +45,7 @@ Ketika project di-import via **GitHub Integration** di Vercel, Vercel akan **oto
 
 2. **Import ulang via GitHub**:
    - https://vercel.com/new
+   - test lg
    - Klik **"Import Git Repository"**
    - Pilih **GitHub**
    - Pilih repository: `rizkybrama/ultah_giva`
