@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Ucapan Ulang Tahun Romantis 💖",
-  description: "Perjalanan cinta kita dalam warna pastel",
+  title: "Happy Birthday Giva 💖",
+  description: "Love you",
 };
 
 export default function RootLayout({
