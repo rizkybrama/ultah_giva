@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Playfair Display', serif;
+}
+
+@layer utilities {
+  .glass-effect {
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+  }
+
+  .gradient-pastel {
+    background: linear-gradient(135deg, #FBEAEC 0%, #F6E7D8 50%, #D8C4E8 100%);
+  }
+
+  .gradient-mint-lavender {
+    background: linear-gradient(135deg, #DCEFE7 0%, #D8C4E8 100%);
+  }
+
+  .page-transition {
+    animation: fadeIn 0.8s ease-in-out;
+  }
+}
+
