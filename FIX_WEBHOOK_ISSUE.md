@@ -27,6 +27,7 @@ Setelah re-import project, webhook tidak terbuat otomatis di GitHub.
 3. Pastikan permissions:
    - ✅ Repository access (atau All repositories)
    - ✅ Repository webhooks
+   tes
    - ✅ Repository contents
 
 4. **Save** atau **Authorize**
