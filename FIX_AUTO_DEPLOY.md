@@ -27,6 +27,7 @@ Ketika project di-import via **GitHub Integration** di Vercel, Vercel akan **oto
 3. **Jika BELUM terhubung**:
    - Klik **"Connect Git Repository"**
    - Pilih **GitHub**
+   - coba
    - Pilih repository: `rizkybrama/ultah_giva`
    - Klik **"Connect"**
    - Vercel akan otomatis create webhook di GitHub
