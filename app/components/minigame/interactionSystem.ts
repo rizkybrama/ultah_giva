@@ -2,7 +2,7 @@
 
 export interface InteractiveObject {
   object: any;
-  type: 'door' | 'tv' | 'cake' | 'lily' | 'sofa' | 'bookshelf' | 'gift' | 'letter' | 'chair';
+  type: 'door' | 'tv' | 'cake' | 'lily' | 'sofa' | 'bookshelf' | 'gift' | 'letter' | 'chair' | 'bed';
   position: { x: number; y: number; z: number };
   interactionRange: number;
   onInteract?: () => void;
@@ -43,13 +43,16 @@ export class InteractionSystem {
 
     // Check if in cutscene mode - if yes, don't show interaction prompts
     const isCutsceneMode = (window as any).storyFlowRef && (window as any).storyFlowRef.isInCutsceneMode();
-    if (isCutsceneMode) {
+    // Check if interaction is currently active (e.g., TV slideshow, letter modal, etc.)
+    const isInteractionActive = (window as any).isInteractionActive || false;
+    
+    if (isCutsceneMode || isInteractionActive) {
       // Hide prompt if currently showing
       if (this.currentNearbyObject && this.onShowPrompt) {
         this.onShowPrompt(null);
         this.currentNearbyObject = null;
       }
-      return; // Don't process interactions during cutscene
+      return; // Don't process interactions during cutscene or when interaction is active
     }
 
     const playerPos = this.player.position;
@@ -267,6 +270,8 @@ function getActionText(type: string): string {
       return 'Buka hadiah';
     case 'letter':
       return 'Baca surat';
+    case 'bed':
+      return 'Lihat kasur';
     case 'chair':
       return 'Duduk';
     default:

@@ -38,6 +38,7 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
     show: boolean;
   }>({ type: null, show: false });
   const [tvSlideIndex, setTvSlideIndex] = useState(0);
+  const [tvMediaItems, setTvMediaItems] = useState<Array<{ type: 'image' | 'video'; url: string }>>([]);
   const [keys, setKeys] = useState<{ [key: string]: boolean }>({});
   const keysRef = useRef<{ [key: string]: boolean }>({});
   const [analogStick, setAnalogStick] = useState({ x: 0, y: 0, active: false });
@@ -251,24 +252,74 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
         });
       }
 
-      // Register TV
+      // Register TV and store media items
       if (interiorObjectsResult && interiorObjectsResult.tvSlideshow) {
         const tv = setup.scene.children.find((child: any) => child.userData && child.userData.type === 'tv');
         if (tv) {
+          // Store media items for modal
+          const mediaItems = [
+            { type: 'image' as const, url: '/images/giva-1.jpeg' },
+            { type: 'image' as const, url: '/images/giva-2.jpeg' },
+            { type: 'image' as const, url: '/images/giva-3.jpeg' },
+            { type: 'image' as const, url: '/images/giva-4.jpeg' },
+            { type: 'image' as const, url: '/images/giva-5.jpeg' },
+            { type: 'image' as const, url: '/images/giva-6.jpeg' },
+            { type: 'image' as const, url: '/images/giva-7.jpeg' },
+            { type: 'image' as const, url: '/images/giva-8.jpeg' },
+            { type: 'image' as const, url: '/images/giva-9.jpeg' },
+            { type: 'image' as const, url: '/images/giva-10.jpeg' },
+            { type: 'image' as const, url: '/images/giva-11.jpeg' }
+          ];
+          setTvMediaItems(mediaItems);
+          // Store media items on window for access from other modules
+          (window as any).tvMediaItems = mediaItems;
+          
+          // Sync tvSlideIndex with slideshow current index
+          if (tv.userData.slideshow) {
+            const updateSlideIndex = () => {
+              const currentIndex = tv.userData.slideshow.getCurrentIndex();
+              setTvSlideIndex(currentIndex);
+            };
+            // Update on slide change
+            if (tv.userData.slideshow.setOnSlideChange) {
+              const originalCallback = tv.userData.slideshow.setOnSlideChange;
+              tv.userData.slideshow.setOnSlideChange((index: number, item: any) => {
+                setTvSlideIndex(index);
+                if (originalCallback) {
+                  originalCallback(index, item);
+                }
+              });
+            }
+          }
+          
           interactionSystem.registerObject({
             object: tv,
             type: 'tv',
             position: { x: 0, y: 1.3, z: 20 },
             interactionRange: 4,
             onInteract: () => {
-              if (tv.userData.controlsUI) {
-                tv.userData.controlsUI.show();
-              }
-              if (tv.userData.slideshow) {
-                if (tv.userData.slideshow.isPlaying()) {
-                  tv.userData.slideshow.pause();
-                } else {
-                  tv.userData.slideshow.play();
+              // Only interact in free roam mode (not cutscene)
+              if (!storyFlow.isInCutsceneMode()) {
+                console.log('[MiniGamePage] TV interaction in free roam');
+                setInteraction({ type: 'tv', show: true });
+                (window as any).isTVInteractionOpen = true;
+                // Sync tvSlideIndex with slideshow current index
+                if (tv.userData.slideshow) {
+                  const currentIndex = tv.userData.slideshow.getCurrentIndex();
+                  setTvSlideIndex(currentIndex);
+                }
+              } else {
+                // In cutscene mode, let story flow handle it
+                // But also allow basic controls
+                if (tv.userData.controlsUI) {
+                  tv.userData.controlsUI.show();
+                }
+                if (tv.userData.slideshow) {
+                  if (tv.userData.slideshow.isPlaying()) {
+                    tv.userData.slideshow.pause();
+                  } else {
+                    tv.userData.slideshow.play();
+                  }
                 }
               }
             }
@@ -281,11 +332,19 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
         interactionSystem.registerObject({
           object: interiorObjectsResult.cake.cakeGroup,
           type: 'cake',
-          position: { x: 0, y: 0.45, z: 2 },
+          position: { x: -0.8, y: 0.45, z: 2 }, // Updated position to match new cake position
           interactionRange: 2,
           onInteract: () => {
-            interiorObjectsResult.cake.blowOut();
-            storyFlow.onCakeInteract();
+            // Only interact in free roam mode (not cutscene)
+            if (!storyFlow.isInCutsceneMode()) {
+              console.log('[MiniGamePage] Cake interaction in free roam');
+              interiorObjectsResult.cake.blowOut();
+              setInteraction({ type: 'cake', show: true });
+            } else {
+              // In cutscene mode, let story flow handle it
+              interiorObjectsResult.cake.blowOut();
+              storyFlow.onCakeInteract();
+            }
           }
         });
       }
@@ -318,7 +377,47 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
             } else if ((window as any).showCouponsUI) {
               (window as any).showCouponsUI((selectedCoupons: string[]) => {
                 // Handle coupon selection in free roam
+                console.log('[MiniGamePage] Coupons selected in free roam:', selectedCoupons);
               });
+            }
+          }
+        });
+      }
+
+      // Register letter (for free roam interaction)
+      if (setup.scene) {
+        const letter = setup.scene.children.find((child: any) => 
+          child.userData && child.userData.type === 'letter' && child.userData.interior
+        );
+        if (letter) {
+          interactionSystem.registerObject({
+            object: letter,
+            type: 'letter',
+            position: { x: -6, y: 0.6, z: 0 },
+            interactionRange: 2,
+            onInteract: () => {
+              // Only interact in free roam mode (not cutscene)
+              if (!storyFlow.isInCutsceneMode()) {
+                console.log('[MiniGamePage] Letter interaction in free roam');
+                setInteraction({ type: 'letter', show: true });
+              }
+            }
+          });
+        }
+      }
+
+      // Register bed (for free roam interaction)
+      if (interiorObjectsResult && interiorObjectsResult.bed) {
+        interactionSystem.registerObject({
+          object: interiorObjectsResult.bed,
+          type: 'bed',
+          position: { x: 0, y: 0.5, z: 4 },
+          interactionRange: 2,
+          onInteract: () => {
+            // Only interact in free roam mode (not cutscene)
+            if (!storyFlow.isInCutsceneMode()) {
+              console.log('[MiniGamePage] Bed interaction in free roam');
+              setInteraction({ type: 'bed', show: true });
             }
           }
         });
@@ -342,11 +441,74 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
       // Store function to open TV interaction
       (window as any).setTVInteraction = (show: boolean) => {
         if (show) {
+          console.log('[MiniGamePage] Opening TV slideshow...');
           setInteraction({ type: 'tv', show: true });
           (window as any).isTVInteractionOpen = true;
+          
+          // Note: Dialog for first slide will be triggered by storyFlow after slideshow opens
+          // This ensures proper timing and prevents duplicate dialogs
+          const setup = (window as any).setupRef;
+          if (setup && setup.scene) {
+            const tv = setup.scene.children.find((child: any) => child.userData && child.userData.type === 'tv');
+            if (tv && tv.userData.slideshow) {
+              const currentIndex = tv.userData.slideshow.getCurrentIndex();
+              setTvSlideIndex(currentIndex);
+            }
+          }
         } else {
+          console.log('[MiniGamePage] Closing TV slideshow...');
           setInteraction({ type: null, show: false });
           (window as any).isTVInteractionOpen = false;
+        }
+      };
+      
+      // Store function to advance to next slide (for auto-advance when dialog completes)
+      // Use a function that always gets the latest values from the slideshow
+      (window as any).tvNextSlide = () => {
+        // Always get current values from slideshow and state, not from closure
+        const setup = (window as any).setupRef;
+        if (!setup || !setup.scene) {
+          console.warn('[MiniGamePage] tvNextSlide: setup or scene not available');
+          return;
+        }
+        
+        const tv = setup.scene.children.find((child: any) => child.userData && child.userData.type === 'tv');
+        if (!tv || !tv.userData.slideshow) {
+          console.warn('[MiniGamePage] tvNextSlide: TV or slideshow not found');
+          return;
+        }
+        
+        // Get current index from slideshow (most reliable source)
+        const currentIndex = tv.userData.slideshow.getCurrentIndex();
+        
+        // Get total slides from media items (stored on window or from slideshow)
+        const mediaItems = (window as any).tvMediaItems || tvMediaItems;
+        const totalSlides = mediaItems.length;
+        
+        // Calculate next index
+        const newIndex = Math.min(totalSlides - 1, currentIndex + 1);
+        
+        // Only advance if not already at last slide
+        if (newIndex > currentIndex) {
+          console.log('[MiniGamePage] Auto-advancing from slide', currentIndex, 'to', newIndex);
+          
+          // Update state (this will trigger re-render)
+          setTvSlideIndex(newIndex);
+          
+          // Update slideshow
+          if (tv.userData.slideshow.next) {
+            tv.userData.slideshow.next();
+          }
+          
+          // Show dialog for new slide (with small delay to ensure slideshow updated)
+          setTimeout(() => {
+            const storyFlow = (window as any).storyFlowRef;
+            if (storyFlow && storyFlow.showTVSlideDialog) {
+              storyFlow.showTVSlideDialog(newIndex);
+            }
+          }, 100);
+        } else {
+          console.log('[MiniGamePage] Already at last slide, cannot advance');
         }
       };
       (window as any).exteriorStringLightsRef = setup.exteriorStringLights;
@@ -558,18 +720,18 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
           if (isCutsceneMode) {
             // Skip player movement during cutscene
           } else {
-            const speed = 0.1;
-            const currentKeys = keysRef.current;
-            const cameraAngle = cameraAngleRef.current.horizontal;
-            
-            // Move player
+        const speed = 0.1;
+        const currentKeys = keysRef.current;
+        const cameraAngle = cameraAngleRef.current.horizontal;
+        
+        // Move player
             const { moved, direction, movementAngle } = playerControlsRef.current.movePlayer(
-              playerRef.current,
-              cameraAngle,
-              currentKeys,
-              analogStickStateRef.current,
-              speed
-            );
+          playerRef.current,
+          cameraAngle,
+          currentKeys,
+          analogStickStateRef.current,
+          speed
+        );
 
           // Rotate player to face movement direction - gunakan sudut pergerakan aktual untuk semua 8 arah
           // Skip if auto-walk is active (rotation already handled)
@@ -635,7 +797,7 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
             
             // Jika player bergerak dan masih dalam initial view, disable initial view
             // agar kamera langsung mengikuti pergerakan player
-            if (initialCameraSetRef.current && !currentIsInside) {
+        if (initialCameraSetRef.current && !currentIsInside) {
               // Hitung sudut horizontal yang benar dari posisi camera saat ini
               const playerToCamera = new THREE.Vector3().subVectors(
                 new THREE.Vector3(cameraRef.current.position.x, 0, cameraRef.current.position.z),
@@ -696,12 +858,12 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
           } else {
             // User sudah drag atau initial view disabled, update camera dengan orbit mode
             // PASTIKAN isInside = false agar kamera tidak masuk ke dalam rumah
-            updateCameraPositionLatest(
-              cameraRef.current,
-              playerRef.current,
+          updateCameraPositionLatest(
+            cameraRef.current,
+            playerRef.current,
               false, // Force isInside to false - HANYA orbit di luar rumah
-              cameraAngleRef.current,
-              THREE,
+            cameraAngleRef.current,
+            THREE,
               false // initialCameraSet = false karena sudah di-drag
             );
           }
@@ -844,6 +1006,25 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
   }, [reloadKey]); // Re-run when reloadKey changes
 
   // Interior objects are now added during scene setup, no need for separate useEffect
+
+  // Hide/show interaction prompt based on interaction state
+  useEffect(() => {
+    // Set global flag for interaction system to check
+    (window as any).isInteractionActive = interaction.show;
+    
+    // Directly hide/show prompt if reference exists
+    const interactionPrompt = (window as any).interactionPromptRef;
+    if (interactionPrompt) {
+      if (interaction.show) {
+        // Hide prompt when interaction is active
+        interactionPrompt.hide();
+      } else {
+        // Show prompt again when interaction is closed
+        // The interaction system's update() will handle showing the prompt for nearby objects
+        // We just need to ensure the flag is cleared
+      }
+    }
+  }, [interaction.show]);
 
   // Keyboard controls
   useEffect(() => {
@@ -1129,19 +1310,87 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
         <InteractionModal
           interaction={interaction}
           tvSlideIndex={tvSlideIndex}
+          tvMediaItems={tvMediaItems}
           selectedCoupons={selectedCoupons}
           onClose={() => {
+            console.log('[MiniGamePage] TV slideshow closing, isTVInteractionOpen:', (window as any).isTVInteractionOpen);
+            
+            // Set state to closed
             setInteraction({ type: null, show: false });
             (window as any).isTVInteractionOpen = false;
-            // Call callback if waiting for slideshow close (story mode)
-            if ((window as any).onTVSlideshowClose) {
-              const callback = (window as any).onTVSlideshowClose;
-              (window as any).onTVSlideshowClose = null;
-              callback();
+            
+            // IMPORTANT: Only call callback after slideshow is COMPLETELY closed
+            // Use verification loop to ensure state is truly updated and slideshow is closed
+            let checkCount = 0;
+            const maxChecks = 20; // Check 20 times over 1 second
+            const checkInterval = setInterval(() => {
+              checkCount++;
+              const isTVOpen = (window as any).isTVInteractionOpen;
+              
+              // Verify slideshow is truly closed: flag must be false
+              // Also check if interaction modal is actually closed by checking DOM
+              const modalElement = document.querySelector('[data-tv-modal]') || 
+                                   document.querySelector('.fixed.inset-0.bg-black');
+              const isModalVisible = modalElement && 
+                                   window.getComputedStyle(modalElement as HTMLElement).display !== 'none';
+              
+              const isTrulyClosed = !isTVOpen && !isModalVisible;
+              
+              if (isTrulyClosed || checkCount >= maxChecks) {
+                clearInterval(checkInterval);
+                
+                // Final verification before calling callback
+                if (!(window as any).isTVInteractionOpen) {
+                  console.log('[MiniGamePage] TV slideshow confirmed closed after', checkCount * 50, 'ms, calling callback');
+                  // Call callback if waiting for slideshow close (story mode)
+                  if ((window as any).onTVSlideshowClose) {
+                    const callback = (window as any).onTVSlideshowClose;
+                    (window as any).onTVSlideshowClose = null;
+                    // Additional small delay to ensure everything is settled
+                    setTimeout(() => {
+                      callback();
+                    }, 100);
+                  }
+                } else {
+                  console.warn('[MiniGamePage] TV slideshow still open after checks, not calling callback');
+                }
+              }
+            }, 50); // Check every 50ms
+          }}
+          onPrevSlide={() => {
+            const newIndex = Math.max(0, tvSlideIndex - 1);
+            setTvSlideIndex(newIndex);
+            // Update slideshow
+            const setup = (window as any).setupRef;
+            if (setup && setup.scene) {
+              const tv = setup.scene.children.find((child: any) => child.userData && child.userData.type === 'tv');
+              if (tv && tv.userData.slideshow && tv.userData.slideshow.prev) {
+                tv.userData.slideshow.prev();
+              }
+            }
+            // Show dialog for new slide
+            const storyFlow = (window as any).storyFlowRef;
+            if (storyFlow && storyFlow.showTVSlideDialog) {
+              storyFlow.showTVSlideDialog(newIndex);
             }
           }}
-          onPrevSlide={() => setTvSlideIndex((prev) => Math.max(0, prev - 1))}
-          onNextSlide={() => setTvSlideIndex((prev) => prev + 1)}
+          onNextSlide={() => {
+            const newIndex = Math.min(tvMediaItems.length - 1, tvSlideIndex + 1);
+            setTvSlideIndex(newIndex);
+            // Update slideshow
+            const setup = (window as any).setupRef;
+            if (setup && setup.scene) {
+              const tv = setup.scene.children.find((child: any) => child.userData && child.userData.type === 'tv');
+              if (tv && tv.userData.slideshow && tv.userData.slideshow.next) {
+                tv.userData.slideshow.next();
+              }
+            }
+            // Show dialog for new slide
+            const storyFlow = (window as any).storyFlowRef;
+            if (storyFlow && storyFlow.showTVSlideDialog) {
+              storyFlow.showTVSlideDialog(newIndex);
+            }
+          }}
         />
 
         <div 

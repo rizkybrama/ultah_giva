@@ -10,7 +10,8 @@ export function createTVSlideshow(
   scene: any,
   tvPosition: { x: number; y: number; z: number },
   tvSize: { width: number; height: number },
-  mediaItems: MediaItem[]
+  mediaItems: MediaItem[],
+  onSlideChange?: (index: number, item: MediaItem) => void // Callback ketika slide berubah
 ): {
   tvScreen: any;
   play: () => void;
@@ -19,6 +20,7 @@ export function createTVSlideshow(
   prev: () => void;
   isPlaying: () => boolean;
   getCurrentIndex: () => number;
+  setOnSlideChange: (callback: (index: number, item: MediaItem) => void) => void;
 } {
   let currentIndex = 0;
   let isPlaying = false;
@@ -26,6 +28,7 @@ export function createTVSlideshow(
   const playDuration = 3000; // 3 seconds per slide
   let currentTexture: any = null;
   let currentVideo: HTMLVideoElement | null = null;
+  let slideChangeCallback: ((index: number, item: MediaItem) => void) | null = onSlideChange || null;
 
   // Create TV screen
   const screenGeometry = new THREE.PlaneGeometry(tvSize.width, tvSize.height);
@@ -116,6 +119,12 @@ export function createTVSlideshow(
     if (index < 0 || index >= mediaItems.length) return;
     
     const item = mediaItems[index];
+    console.log('[TVSlideshow] loadMedia called for index:', index, 'url:', item.url);
+    
+    // Call onSlideChange callback
+    if (slideChangeCallback) {
+      slideChangeCallback(index, item);
+    }
     
     // Clean up previous media
     if (currentVideo) {
@@ -129,6 +138,7 @@ export function createTVSlideshow(
 
     // If placeholder URL, use placeholder texture immediately
     if (isPlaceholder(item.url)) {
+      console.log('[TVSlideshow] Detected placeholder URL, using placeholder texture');
       const placeholderText = item.type === 'image' ? `Photo ${index + 1}` : `Video ${index + 1}`;
       const placeholderTexture = createPlaceholderTexture(placeholderText, '#1a1a1a', index);
       currentTexture = placeholderTexture;
@@ -136,13 +146,28 @@ export function createTVSlideshow(
       screenMaterial.needsUpdate = true;
       return;
     }
+    
+    console.log('[TVSlideshow] Not a placeholder, loading actual media:', item.url);
 
     if (item.type === 'image') {
       // Load image
+      // Ensure URL is absolute if it starts with /
+      let imageUrl = item.url;
+      if (imageUrl.startsWith('/') && typeof window !== 'undefined') {
+        // In browser, use absolute URL
+        imageUrl = window.location.origin + imageUrl;
+      }
+      
+      console.log('[TVSlideshow] Loading image:', imageUrl, 'at index:', index);
       const textureLoader = new THREE.TextureLoader();
+      
+      // Set crossOrigin untuk CORS jika diperlukan
+      textureLoader.setCrossOrigin('anonymous');
+      
       textureLoader.load(
-        item.url,
+        imageUrl,
         (texture: any) => {
+          console.log('[TVSlideshow] Image loaded successfully:', imageUrl);
           texture.flipY = false; // Fix WebGL error for 3D textures
           texture.minFilter = THREE.LinearFilter;
           texture.magFilter = THREE.LinearFilter;
@@ -150,14 +175,47 @@ export function createTVSlideshow(
           screenMaterial.map = texture;
           screenMaterial.needsUpdate = true;
         },
-        undefined,
+        (progress: any) => {
+          // Loading progress (optional)
+          if (progress && progress.total) {
+            const percent = (progress.loaded / progress.total) * 100;
+            console.log('[TVSlideshow] Loading progress:', imageUrl, percent + '%');
+          }
+        },
         (error: any) => {
-          console.warn('Failed to load image:', item.url, error);
-          // Use placeholder
-          const placeholderTexture = createPlaceholderTexture(`Photo ${index + 1}`, '#1a1a1a', index);
-          currentTexture = placeholderTexture;
-          screenMaterial.map = placeholderTexture;
-          screenMaterial.needsUpdate = true;
+          console.error('[TVSlideshow] Failed to load image:', imageUrl, error);
+          // Try fallback: use relative path without leading slash
+          if (item.url.startsWith('/')) {
+            const fallbackUrl = item.url.substring(1); // Remove leading slash
+            console.log('[TVSlideshow] Trying fallback URL:', fallbackUrl);
+            textureLoader.load(
+              fallbackUrl,
+              (texture: any) => {
+                console.log('[TVSlideshow] Fallback image loaded successfully:', fallbackUrl);
+                texture.flipY = false;
+                texture.minFilter = THREE.LinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                currentTexture = texture;
+                screenMaterial.map = texture;
+                screenMaterial.needsUpdate = true;
+              },
+              undefined,
+              (fallbackError: any) => {
+                console.error('[TVSlideshow] Fallback also failed:', fallbackUrl, fallbackError);
+                // Use placeholder as last resort
+                const placeholderTexture = createPlaceholderTexture(`Photo ${index + 1}`, '#1a1a1a', index);
+                currentTexture = placeholderTexture;
+                screenMaterial.map = placeholderTexture;
+                screenMaterial.needsUpdate = true;
+              }
+            );
+          } else {
+            // Use placeholder
+            const placeholderTexture = createPlaceholderTexture(`Photo ${index + 1}`, '#1a1a1a', index);
+            currentTexture = placeholderTexture;
+            screenMaterial.map = placeholderTexture;
+            screenMaterial.needsUpdate = true;
+          }
         }
       );
     } else if (item.type === 'video') {
@@ -237,6 +295,11 @@ export function createTVSlideshow(
   // Get current index
   const getCurrentIndex = () => currentIndex;
 
+  // Set onSlideChange callback
+  const setOnSlideChange = (callback: (index: number, item: MediaItem) => void) => {
+    slideChangeCallback = callback;
+  };
+
   // Load initial media
   if (mediaItems.length > 0) {
     loadMedia(0);
@@ -249,6 +312,7 @@ export function createTVSlideshow(
   tvScreen.userData.prev = prev;
   tvScreen.userData.isPlaying = getIsPlaying;
   tvScreen.userData.getCurrentIndex = getCurrentIndex;
+  tvScreen.userData.setOnSlideChange = setOnSlideChange;
 
   return {
     tvScreen,
@@ -257,7 +321,8 @@ export function createTVSlideshow(
     next,
     prev,
     isPlaying: getIsPlaying,
-    getCurrentIndex
+    getCurrentIndex,
+    setOnSlideChange
   };
 }
 

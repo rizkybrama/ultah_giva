@@ -237,24 +237,6 @@ export default function CouponsUI({ onComplete, onSkip }: CouponsUIProps) {
           gap: '10px',
           justifyContent: 'center'
         }}>
-          {onSkip && (
-            <button
-              onClick={onSkip}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: '#DDD',
-                color: '#333',
-                border: 'none',
-                borderRadius: '25px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 'bold'
-              }}
-            >
-              Skip
-            </button>
-          )}
-          
           <button
             onClick={handleSend}
             disabled={selectedCoupons.length !== 3}

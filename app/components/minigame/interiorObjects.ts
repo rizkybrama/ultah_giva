@@ -104,7 +104,7 @@ export function addInteriorObjects(
   letter.userData = { type: 'letter', interactive: true, interior: true };
   letter.castShadow = true;
   scene.add(letter);
-  
+
   // Add collision detection for letter table (prevent player from walking through it)
   // Letter is on a table at x: -6, z: 0, so we need collision for the table area
   const letterTableCollisionBox = new THREE.BoxGeometry(1.2, 0.6, 1.2);
@@ -127,32 +127,36 @@ export function addInteriorObjects(
   scene.add(sofa);
   addToCollision(sofa, collisionObjects, interiorRules);
 
-  // Coffee table in front of sofa - Light brown wood, centered with legs
-  const coffeeTableTopGeometry = new THREE.BoxGeometry(2.2, 0.1, 1.2);
+  // Coffee table in front of sofa - Light brown wood, centered with legs (LARGER SIZE)
+  const coffeeTableTopGeometry = new THREE.BoxGeometry(3.5, 0.1, 2.0); // Increased from 2.2 x 1.2 to 3.5 x 2.0
   const coffeeTableTop = new THREE.Mesh(coffeeTableTopGeometry, woodMaterial);
-  coffeeTableTop.position.set(0, 0.45, 2); // Top at y = 0.45 (legs height 0.4)
+  // Table top center at y = 0.45, so bottom of table = 0.45 - 0.05 = 0.4
+  coffeeTableTop.position.set(0, 0.45, 2);
   coffeeTableTop.castShadow = true;
   coffeeTableTop.receiveShadow = true;
   scene.add(coffeeTableTop);
   addToCollision(coffeeTableTop, collisionObjects, interiorRules);
   
-  // Coffee table legs
+  // Coffee table legs - positioned directly under table corners
+  // Table top spans: x from -1.75 to 1.75, z from 1.0 to 3.0
+  // Legs should be at corners: x = ±1.5, z = 1.2 and 2.8 (slightly inset from edge)
+  const coffeeLegGeometry = new THREE.BoxGeometry(0.08, 0.4, 0.08);
   const coffeeLegPositions = [
-    [-1, 0.2, -0.5],
-    [1, 0.2, -0.5],
-    [-1, 0.2, 0.5],
-    [1, 0.2, 0.5],
+    [-1.5, 0.2, 1.2],  // Front-left: y = 0.2 (center of 0.4 height leg, bottom at 0, top at 0.4 = table bottom)
+    [1.5, 0.2, 1.2],   // Front-right
+    [-1.5, 0.2, 2.8],  // Back-left
+    [1.5, 0.2, 2.8],   // Back-right
   ];
   coffeeLegPositions.forEach(([x, y, z]) => {
-    const leg = new THREE.Mesh(tableLegGeometry, woodMaterial);
+    const leg = new THREE.Mesh(coffeeLegGeometry, woodMaterial);
     leg.position.set(x, y, z);
     leg.castShadow = true;
     scene.add(leg);
     addToCollision(leg, collisionObjects, interiorRules);
   });
 
-  // Birthday Cake on coffee table
-  const cake = createRealisticCake(THREE, scene, { x: 0, y: 0.45, z: 2 });
+  // Birthday Cake on coffee table - positioned on LEFT side of table
+  const cake = createRealisticCake(THREE, scene, { x: -0.8, y: 0.45, z: 2 });
   cake.cakeGroup.userData.interactive = true;
   cake.cakeGroup.userData.interior = true;
   
@@ -160,7 +164,7 @@ export function addInteriorObjects(
   // Create a collision box around the cake (radius ~0.4, height ~0.5)
   const cakeCollisionBox = new THREE.BoxGeometry(0.8, 0.5, 0.8);
   const cakeCollisionMesh = new THREE.Mesh(cakeCollisionBox, new THREE.MeshBasicMaterial({ visible: false }));
-  cakeCollisionMesh.position.set(0, 0.25, 2); // Center of cake
+  cakeCollisionMesh.position.set(-0.8, 0.25, 2); // Center of cake (moved to left side)
   cakeCollisionMesh.userData.isCollision = true;
   scene.add(cakeCollisionMesh);
   addToCollision(cakeCollisionMesh, collisionObjects, interiorRules);
@@ -185,18 +189,26 @@ export function addInteriorObjects(
   addToCollision(tv, collisionObjects, interiorRules);
 
   // TV Slideshow - Replace old screen with slideshow system
-  // Placeholder media items (replace with actual URLs later)
+  // Menggunakan gambar giva-1.jpeg sampai giva-11.jpeg dari public/images
   const mediaItems: MediaItem[] = [
-    { type: 'image', url: 'url-photo1.jpg' },
-    { type: 'image', url: 'url-photo2.jpg' },
-    { type: 'video', url: 'url-video1.mp4' }
+    { type: 'image', url: '/images/giva-1.jpeg' },
+    { type: 'image', url: '/images/giva-2.jpeg' },
+    { type: 'image', url: '/images/giva-3.jpeg' },
+    { type: 'image', url: '/images/giva-4.jpeg' },
+    { type: 'image', url: '/images/giva-5.jpeg' },
+    { type: 'image', url: '/images/giva-6.jpeg' },
+    { type: 'image', url: '/images/giva-7.jpeg' },
+    { type: 'image', url: '/images/giva-8.jpeg' },
+    { type: 'image', url: '/images/giva-9.jpeg' },
+    { type: 'image', url: '/images/giva-10.jpeg' },
+    { type: 'image', url: '/images/giva-11.jpeg' }
   ];
   
   const tvSlideshow = createTVSlideshow(
     THREE,
     scene,
-    { x: 0, y: 1.3, z: 20.1 },
-    { width: 2.2, height: 1.5 },
+    { x: 0, y: 1.5, z: 20.1 }, // Adjusted Y position untuk TV lebih besar
+    { width: 4.5, height: 3.2 }, // TV lebih besar: dari 2.2x1.5 menjadi 4.5x3.2
     mediaItems
   );
   
@@ -512,11 +524,13 @@ export function addInteriorObjects(
     0xDDA0DD  // Plum
   ];
   
-  // Create 3-4 gift boxes in a row on coffee table
+  // Create 3-4 gift boxes in a row on coffee table - positioned on RIGHT side of table
   const boxCount = 4;
   const boxSize = 0.3;
   const boxSpacing = 0.35;
   const startX = -(boxCount - 1) * boxSpacing / 2;
+  // Offset to right side of table (cake is at x: -0.8, so place gifts at x: 0.8+)
+  const giftBoxOffsetX = 0.8; // Right side of table, away from cake
   
   for (let i = 0; i < boxCount; i++) {
     const giftGeometry = new THREE.BoxGeometry(boxSize, boxSize, boxSize);
@@ -529,7 +543,7 @@ export function addInteriorObjects(
     gift.position.set(startX + i * boxSpacing, 0, 0);
     gift.castShadow = true;
     gift.receiveShadow = true;
-    
+
     // Add ribbon to each box
     const ribbonGeometry = new THREE.BoxGeometry(0.03, boxSize, 0.03);
     const ribbonMaterial = new THREE.MeshStandardMaterial({ color: 0xFF69B4 });
@@ -548,14 +562,14 @@ export function addInteriorObjects(
     giftBoxesGroup.add(gift);
   }
   
-  // Position gift boxes group on coffee table
-  giftBoxesGroup.position.set(0, 0.85, 2); // On coffee table (table top at 0.45, gift center at 0.85)
+  // Position gift boxes group on coffee table - RIGHT side (away from cake on left)
+  giftBoxesGroup.position.set(giftBoxOffsetX, 0.85, 2); // On coffee table (table top at 0.45, gift center at 0.85)
   scene.add(giftBoxesGroup);
   
   // Add collision detection for gift boxes
   const giftCollisionBox = new THREE.BoxGeometry(boxCount * boxSpacing, boxSize, boxSize);
   const giftCollisionMesh = new THREE.Mesh(giftCollisionBox, new THREE.MeshBasicMaterial({ visible: false }));
-  giftCollisionMesh.position.set(0, 0.85, 2);
+  giftCollisionMesh.position.set(giftBoxOffsetX, 0.85, 2); // Updated position to match gift boxes
   giftCollisionMesh.userData.isCollision = true;
   scene.add(giftCollisionMesh);
   addToCollision(giftCollisionMesh, collisionObjects, interiorRules);
