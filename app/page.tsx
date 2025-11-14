@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import CountdownPage from './components/CountdownPage';
+import NewGamePage from './components/NewGamePage';
+import CreditsPage from './components/CreditsPage';
 import HeroPage from './components/HeroPage';
 import MoodStormPage from './components/MoodStormPage';
 import TimelinePage from './components/TimelinePage';
@@ -45,10 +47,12 @@ const MiniGamePage = dynamic(
     ),
   }
 );
-import MusicControl from './components/MusicControl';
+// import MusicControl from './components/MusicControl'; // Disabled - tombol play/pause dihilangkan
 
 type PageType =
   | 'countdown'
+  | 'new-game'
+  | 'credits'
   | 'hero'
   | 'mood-storm'
   | 'timeline'
@@ -59,15 +63,15 @@ type PageType =
   | 'mini-game';
 
 export default function Home() {
-  // DEBUG: Set to mini-game untuk debugging, ganti kembali ke 'countdown' setelah selesai
-  const [currentPage, setCurrentPage] = useState<PageType>('mini-game');
+  const [currentPage, setCurrentPage] = useState<PageType>('countdown');
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [newGameMusicEnabled, setNewGameMusicEnabled] = useState(true);
   const [selectedCoupons, setSelectedCoupons] = useState<Array<{ id: number; title: string; emoji: string }>>([]);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [showOpeningTransition, setShowOpeningTransition] = useState(false);
 
-  // Show music control after countdown is unlocked
-  const showMusicControl = audioEnabled && currentPage !== 'countdown';
+  // Music control disabled - tombol play/pause dihilangkan
+  // const showMusicControl = audioEnabled && currentPage !== 'countdown';
 
   // Handle music change based on current page (except mood-storm which is handled in onNoClick)
   useEffect(() => {
@@ -112,19 +116,34 @@ export default function Home() {
         <source src="/audio/ayaya.mp3" type="audio/mpeg" />
       </audio>
 
-      {/* Music Control */}
-      {showMusicControl && (
+      {/* Music Control - Disabled */}
+      {/* {showMusicControl && (
         <MusicControl audioRef={audioRef} />
-      )}
+      )} */}
 
       {/* Pages */}
       {currentPage === 'countdown' && (
         <CountdownPage
           onNext={() => {
-            setShowOpeningTransition(true);
-            setCurrentPage('hero');
+            setCurrentPage('new-game');
           }}
           onAudioEnable={() => setAudioEnabled(true)}
+        />
+      )}
+
+      {currentPage === 'new-game' && (
+        <NewGamePage
+          onNewGame={() => setCurrentPage('mini-game')}
+          onCredits={() => setCurrentPage('credits')}
+          onMusicToggle={(enabled) => setNewGameMusicEnabled(enabled)}
+          musicEnabled={newGameMusicEnabled}
+        />
+      )}
+
+      {currentPage === 'credits' && (
+        <CreditsPage
+          onBack={() => setCurrentPage('new-game')}
+          musicEnabled={newGameMusicEnabled}
         />
       )}
 
@@ -210,8 +229,10 @@ export default function Home() {
 
       {currentPage === 'mini-game' && (
         <MiniGamePage 
-          onExit={() => setCurrentPage('final')}
+          onExit={() => setCurrentPage('new-game')}
           selectedCoupons={selectedCoupons}
+          musicEnabled={newGameMusicEnabled}
+          onMusicToggle={(enabled) => setNewGameMusicEnabled(enabled)}
         />
       )}
 

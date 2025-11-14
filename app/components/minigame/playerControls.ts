@@ -30,12 +30,26 @@ export function createPlayerControls(
         // Cek apakah objek adalah gunung
         const isMountain = obj.userData && obj.userData.type === 'mountain';
         
+        // Cek apakah objek adalah meja
+        const isTable = obj.userData && obj.userData.type === 'table';
+        
+        // Cek apakah objek adalah kasur
+        const isBed = obj.userData && obj.userData.type === 'bed';
+        
         // Tambahkan margin yang lebih besar untuk lebih toleran
         const objBox = new THREE.Box3().setFromObject(obj);
         
         if (isWall) {
           // Untuk tembok: TIDAK BISA DITEMBUS SAMA SEKALI
           // Jangan kurangi margin, atau kurangi sedikit saja untuk toleransi minimal
+          objBox.expandByScalar(-0.1); // Hanya kurangi 0.1 unit untuk toleransi minimal, tetap solid
+        } else if (isTable) {
+          // Untuk meja: TIDAK BISA DITEMBUS, sama seperti tembok
+          // Kurangi margin sedikit saja untuk toleransi minimal, tetap solid
+          objBox.expandByScalar(-0.1); // Hanya kurangi 0.1 unit untuk toleransi minimal, tetap solid
+        } else if (isBed) {
+          // Untuk kasur: TIDAK BISA DITEMBUS, sama seperti tembok dan meja
+          // Kurangi margin sedikit saja untuk toleransi minimal, tetap solid
           objBox.expandByScalar(-0.1); // Hanya kurangi 0.1 unit untuk toleransi minimal, tetap solid
         } else if (isMountain) {
           // Untuk gunung: bisa sangat dekat tapi TIDAK BISA MENEMBUS

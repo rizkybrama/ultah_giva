@@ -10,6 +10,7 @@ import { createCeramicTileFloor, createRug } from './interiorFloor';
 import { createTVSlideshow, createTVControlsUI, type MediaItem } from './tvSlideshow';
 import { createRealisticCake } from './birthdayCake';
 import { createLilyBouquet } from './lilyBouquet';
+import { tvSlideshowConfig } from './tvSlideshowConfig';
 
 export function addInteriorObjects(
   scene: any, 
@@ -17,6 +18,10 @@ export function addInteriorObjects(
   collisionObjects: any[],
   selectedCoupons: Array<{ id: number; title: string; emoji: string }>
 ) {
+  // Detect mobile for performance optimization
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                   (typeof window !== 'undefined' && window.innerWidth <= 768);
+  
   // Create ceramic tile floor
   const floor = createCeramicTileFloor(scene, THREE, HOUSE_BOUNDS);
   scene.add(floor);
@@ -134,6 +139,7 @@ export function addInteriorObjects(
   coffeeTableTop.position.set(0, 0.45, 2);
   coffeeTableTop.castShadow = true;
   coffeeTableTop.receiveShadow = true;
+  coffeeTableTop.userData.type = 'table'; // Mark as table for collision detection
   scene.add(coffeeTableTop);
   addToCollision(coffeeTableTop, collisionObjects, interiorRules);
   
@@ -151,6 +157,7 @@ export function addInteriorObjects(
     const leg = new THREE.Mesh(coffeeLegGeometry, woodMaterial);
     leg.position.set(x, y, z);
     leg.castShadow = true;
+    leg.userData.type = 'table'; // Mark as table for collision detection
     scene.add(leg);
     addToCollision(leg, collisionObjects, interiorRules);
   });
@@ -189,20 +196,11 @@ export function addInteriorObjects(
   addToCollision(tv, collisionObjects, interiorRules);
 
   // TV Slideshow - Replace old screen with slideshow system
-  // Menggunakan gambar giva-1.jpeg sampai giva-11.jpeg dari public/images
-  const mediaItems: MediaItem[] = [
-    { type: 'image', url: '/images/giva-1.jpeg' },
-    { type: 'image', url: '/images/giva-2.jpeg' },
-    { type: 'image', url: '/images/giva-3.jpeg' },
-    { type: 'image', url: '/images/giva-4.jpeg' },
-    { type: 'image', url: '/images/giva-5.jpeg' },
-    { type: 'image', url: '/images/giva-6.jpeg' },
-    { type: 'image', url: '/images/giva-7.jpeg' },
-    { type: 'image', url: '/images/giva-8.jpeg' },
-    { type: 'image', url: '/images/giva-9.jpeg' },
-    { type: 'image', url: '/images/giva-10.jpeg' },
-    { type: 'image', url: '/images/giva-11.jpeg' }
-  ];
+  // Menggunakan konfigurasi dari tvSlideshowConfig.ts
+  const mediaItems: MediaItem[] = tvSlideshowConfig.map(item => ({
+    type: item.type,
+    url: item.url
+  }));
   
   const tvSlideshow = createTVSlideshow(
     THREE,
@@ -282,6 +280,7 @@ export function addInteriorObjects(
   sideboardTop.position.set(6, 0.55, 0); // Top at y = 0.55 (legs height 0.5)
   sideboardTop.castShadow = true;
   sideboardTop.receiveShadow = true;
+  sideboardTop.userData.type = 'table'; // Mark as table for collision detection
   scene.add(sideboardTop);
   addToCollision(sideboardTop, collisionObjects, interiorRules);
   
@@ -299,6 +298,16 @@ export function addInteriorObjects(
     scene.add(leg);
     addToCollision(leg, collisionObjects, interiorRules);
   });
+
+  // Add collision detection for sideboard table (prevent player from walking through it)
+  // Table size: 1.5 x 0.8, position: x: 6, z: 0, height: 0.55
+  const sideboardCollisionBox = new THREE.BoxGeometry(1.5, 0.6, 0.8);
+  const sideboardCollisionMesh = new THREE.Mesh(sideboardCollisionBox, new THREE.MeshBasicMaterial({ visible: false }));
+  sideboardCollisionMesh.position.set(6, 0.3, 0); // Center of collision box
+  sideboardCollisionMesh.userData.isCollision = true;
+  sideboardCollisionMesh.userData.type = 'table'; // Mark as table for collision detection
+  scene.add(sideboardCollisionMesh);
+  addToCollision(sideboardCollisionMesh, collisionObjects, interiorRules);
 
   // Lily Bouquet on sideboard
   const lilyBouquet = createLilyBouquet(THREE, scene, { x: 6, y: 0.55, z: 0 });
@@ -383,28 +392,32 @@ export function addInteriorObjects(
   scene.add(deskChair);
   addToCollision(deskChair, collisionObjects, interiorRules);
   
-  // Bookshelf (left side, back) - Light brown wood, on floor
+  // Bookshelf (left side, back) - Light brown wood, MENEMPEL DI TEMBOK KIRI
   const leftBookshelfGeometry = new THREE.BoxGeometry(1.5, 3, 0.5);
   const leftBookshelf = new THREE.Mesh(leftBookshelfGeometry, woodMaterial);
-  leftBookshelf.position.set(-10, 1.5, 4); // Y = 1.5 (setengah tinggi 3), bottom at y = 0
+  // Tembok kiri di x = -20, bookshelf menempel di x = -19.75 (sedikit di dalam dari tembok)
+  // Posisi z: 4 (sama dengan sofa kiri, tapi tidak overlap karena sofa di x: -6)
+  leftBookshelf.position.set(-19.75, 1.5, 4); // Y = 1.5 (setengah tinggi 3), bottom at y = 0
   leftBookshelf.castShadow = true;
   leftBookshelf.receiveShadow = true;
   scene.add(leftBookshelf);
   addToCollision(leftBookshelf, collisionObjects, interiorRules);
   
-  // Cabinet/Wardrobe (right side, middle) - on floor
+  // Cabinet/Wardrobe - MENEMPEL DI TEMBOK KIRI
   const cabinetGeometry = new THREE.BoxGeometry(2, 2.5, 1);
   const cabinet = new THREE.Mesh(cabinetGeometry, woodMaterial);
-  cabinet.position.set(10, 1.25, 0); // Y = 1.25 (setengah tinggi 2.5), bottom at y = 0
+  // Tembok kiri di x = -20, lemari menempel di x = -19.75 (sedikit di dalam dari tembok)
+  // Posisi z: 0 (jauh dari meja surat di x: -6, z: 0 dan bookshelf di z: 4)
+  cabinet.position.set(-19.75, 1.25, 0); // Y = 1.25 (setengah tinggi 2.5), bottom at y = 0
   cabinet.castShadow = true;
   cabinet.receiveShadow = true;
   scene.add(cabinet);
   addToCollision(cabinet, collisionObjects, interiorRules);
   
-  // Small side table (center-right, middle) with legs
+  // Small side table with plant - DI KIRI TV (TV di x: 0, z: 20)
   const sideTableTopGeometry = new THREE.BoxGeometry(1, 0.1, 1);
   const sideTableTop = new THREE.Mesh(sideTableTopGeometry, woodMaterial);
-  sideTableTop.position.set(3, 0.55, 8); // Top at y = 0.55 (legs height 0.5)
+  sideTableTop.position.set(-3, 0.55, 20); // Di kiri TV (TV di x: 0, z: 20)
   sideTableTop.castShadow = true;
   sideTableTop.receiveShadow = true;
   scene.add(sideTableTop);
@@ -412,10 +425,10 @@ export function addInteriorObjects(
   
   // Side table legs
   const sideLegPositions = [
-    [2.5, 0.25, 7.5],
-    [3.5, 0.25, 7.5],
-    [2.5, 0.25, 8.5],
-    [3.5, 0.25, 8.5],
+    [-3.5, 0.25, 19.5],
+    [-2.5, 0.25, 19.5],
+    [-3.5, 0.25, 20.5],
+    [-2.5, 0.25, 20.5],
   ];
   sideLegPositions.forEach(([x, y, z]) => {
     const leg = new THREE.Mesh(tableLegGeometry, woodMaterial);
@@ -425,20 +438,20 @@ export function addInteriorObjects(
     addToCollision(leg, collisionObjects, interiorRules);
   });
   
-  // Plant pot on side table
-  const potGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.4, 16);
+  // Plant pot on side table - Optimize geometry for mobile
+  const potGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.4, isMobile ? 8 : 16);
   const potMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 }); // Brown pot
   const pot = new THREE.Mesh(potGeometry, potMaterial);
-  pot.position.set(3, 0.75, 8); // On side table (table top at 0.55, pot center at 0.75)
-  pot.castShadow = true;
+  pot.position.set(-3, 0.75, 20); // On side table (table top at 0.55, pot center at 0.75)
+  pot.castShadow = !isMobile; // Disable shadows on mobile
   scene.add(pot);
   
   // Plant leaves
-  const plantGeometry = new THREE.ConeGeometry(0.3, 0.6, 8);
+  const plantGeometry = new THREE.ConeGeometry(0.3, 0.6, isMobile ? 6 : 8);
   const plantMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 }); // Green
   const plant = new THREE.Mesh(plantGeometry, plantMaterial);
-  plant.position.set(3, 1.15, 8); // On top of pot
-  plant.castShadow = true;
+  plant.position.set(-3, 1.15, 20); // On top of pot
+  plant.castShadow = !isMobile; // Disable shadows on mobile
   scene.add(plant);
   
   // Additional chairs (scattered) - on floor
@@ -467,44 +480,90 @@ export function addInteriorObjects(
     scene.add(book);
   }
   
-  // Wall decorations - More paintings
-  const paintingGeometry = new THREE.BoxGeometry(1.2, 0.8, 0.1);
-  const paintingMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF }); // White frames
+  // Wall decorations - Paintings with Giva images, TEMPEL KE DINDING
+  // Dinding kiri: x = -20, dinding kanan: x = 20, dinding belakang: z = 24
+  // Lukisan harus sedikit di dalam dari dinding (z atau x offset kecil)
   
-  // Paintings on side walls
-  const painting1 = new THREE.Mesh(paintingGeometry, paintingMaterial);
-  painting1.position.set(-10, 2, 8);
-  painting1.castShadow = true;
+  // Helper function to create painting with image texture
+  const createPainting = (imagePath: string, position: { x: number; y: number; z: number }, rotation: number = 0) => {
+    const textureLoader = new THREE.TextureLoader();
+    const texture = textureLoader.load(imagePath, 
+      () => console.log('Painting texture loaded:', imagePath),
+      undefined,
+      (err: any) => console.warn('Error loading painting texture:', imagePath, err)
+    );
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    
+    // Frame geometry (slightly thicker for depth)
+    const frameGeometry = new THREE.BoxGeometry(1.2, 0.8, 0.05);
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 }); // Brown wood frame
+    
+    // Picture geometry (inside frame)
+    const pictureGeometry = new THREE.PlaneGeometry(1.0, 0.7);
+    const pictureMaterial = new THREE.MeshStandardMaterial({ 
+      map: texture,
+      side: THREE.DoubleSide
+    });
+    
+    const paintingGroup = new THREE.Group();
+    
+    // Frame
+    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+    frame.position.set(0, 0, 0);
+    paintingGroup.add(frame);
+    
+    // Picture (slightly in front of frame)
+    const picture = new THREE.Mesh(pictureGeometry, pictureMaterial);
+    picture.position.set(0, 0, 0.03); // Slightly in front
+    paintingGroup.add(picture);
+    
+    paintingGroup.position.set(position.x, position.y, position.z);
+    if (rotation !== 0) {
+      paintingGroup.rotation.y = rotation;
+    }
+    paintingGroup.castShadow = true;
+    
+    return paintingGroup;
+  };
+  
+  // Paintings on LEFT wall (x = -20, so position at x = -19.9 to be inside)
+  // Dinding kiri menghadap ke arah positif x, jadi lukisan menghadap ke arah positif x (rotasi Math.PI/2)
+  const painting1 = createPainting('/images/giva-1.jpeg', { x: -19.9, y: 2, z: 8 }, Math.PI / 2);
   scene.add(painting1);
   
-  const painting2 = new THREE.Mesh(paintingGeometry, paintingMaterial);
-  painting2.position.set(10, 2, 8);
-  painting2.castShadow = true;
-  scene.add(painting2);
-  
-  const painting3 = new THREE.Mesh(paintingGeometry, paintingMaterial);
-  painting3.position.set(-10, 2, 12);
-  painting3.castShadow = true;
+  const painting3 = createPainting('/images/giva-3.jpeg', { x: -19.9, y: 2, z: 12 }, Math.PI / 2);
   scene.add(painting3);
   
-  const painting4 = new THREE.Mesh(paintingGeometry, paintingMaterial);
-  painting4.position.set(10, 2, 12);
-  painting4.castShadow = true;
+  // Paintings on RIGHT wall (x = 20, so position at x: 19.9 to be inside)
+  // Dinding kanan menghadap ke arah negatif x, jadi lukisan menghadap ke arah negatif x (rotasi -Math.PI/2)
+  const painting2 = createPainting('/images/giva-2.jpeg', { x: 19.9, y: 2, z: 8 }, -Math.PI / 2);
+  scene.add(painting2);
+  
+  const painting4 = createPainting('/images/giva-4.jpeg', { x: 19.9, y: 2, z: 12 }, -Math.PI / 2);
   scene.add(painting4);
   
-  // Floor lamp (near sofa) - on floor
-  const lampBaseGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.5, 8);
+  // Paintings on BACK wall (z = 24, so position at z = 23.9 to be inside)
+  // Dinding belakang menghadap ke arah negatif z, jadi lukisan perlu rotasi Math.PI (180 derajat)
+  const painting5 = createPainting('/images/giva-5.jpeg', { x: -8, y: 2, z: 23.9 }, Math.PI);
+  scene.add(painting5);
+  
+  const painting6 = createPainting('/images/giva-6.jpeg', { x: 8, y: 2, z: 23.9 }, Math.PI);
+  scene.add(painting6);
+  
+  // Floor lamp - DI KANAN TV (TV di x: 0, z: 20) - Optimize for mobile
+  const lampBaseGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.5, isMobile ? 6 : 8);
   const lampBaseMaterial = new THREE.MeshStandardMaterial({ color: 0x2C2C2C }); // Dark grey
   const lampBase = new THREE.Mesh(lampBaseGeometry, lampBaseMaterial);
-  lampBase.position.set(-3, 0.75, 4); // Y = 0.75 (setengah tinggi 1.5), bottom at y = 0
-  lampBase.castShadow = true;
+  lampBase.position.set(3, 0.75, 20); // Di kanan TV (TV di x: 0, z: 20), Y = 0.75 (setengah tinggi 1.5), bottom at y = 0
+  lampBase.castShadow = !isMobile; // Disable shadows on mobile
   scene.add(lampBase);
   
-  const lampShadeGeometry = new THREE.ConeGeometry(0.4, 0.5, 8);
+  const lampShadeGeometry = new THREE.ConeGeometry(0.4, 0.5, isMobile ? 6 : 8);
   const lampShadeMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF }); // White shade
   const lampShade = new THREE.Mesh(lampShadeGeometry, lampShadeMaterial);
-  lampShade.position.set(-3, 2.0, 4); // On top of lamp base (base top at 1.5, shade center at 2.0)
-  lampShade.castShadow = true;
+  lampShade.position.set(3, 2.0, 20); // On top of lamp base (base top at 1.5, shade center at 2.0)
+  lampShade.castShadow = !isMobile; // Disable shadows on mobile
   scene.add(lampShade);
   
   // Gift boxes (Birthday Coupons) - Multiple pastel boxes on coffee table
@@ -574,7 +633,7 @@ export function addInteriorObjects(
   scene.add(giftCollisionMesh);
   addToCollision(giftCollisionMesh, collisionObjects, interiorRules);
 
-  // Doormat near entrance
+  // Doormat near entrance - dengan jarak dari pintu
   const doormatGeometry = new THREE.PlaneGeometry(1.5, 0.8);
   const doormatMaterial = new THREE.MeshStandardMaterial({
     color: 0x8B4513, // Brown doormat
@@ -582,7 +641,7 @@ export function addInteriorObjects(
   });
   const doormat = new THREE.Mesh(doormatGeometry, doormatMaterial);
   doormat.rotation.x = -Math.PI / 2;
-  doormat.position.set(-1, 0.01, -4); // Near door entrance
+  doormat.position.set(-1, 0.01, -2.5); // Dengan jarak dari pintu (pintu di z: -5.85, keset di z: -2.5)
   doormat.receiveShadow = true;
   scene.add(doormat);
 
@@ -634,11 +693,22 @@ export function addInteriorObjects(
   const bedCollisionMesh = new THREE.Mesh(bedCollisionBox, new THREE.MeshBasicMaterial({ visible: false }));
   bedCollisionMesh.position.set(0, 0.25, 4);
   bedCollisionMesh.userData.isCollision = true;
+  bedCollisionMesh.userData.type = 'bed'; // Mark as bed for collision detection
   scene.add(bedCollisionMesh);
   addToCollision(bedCollisionMesh, collisionObjects, interiorRules);
 
   // Add warm interior lighting
   setupInteriorLighting(scene, THREE);
+
+  // Disable shadows on all objects for mobile performance
+  if (isMobile) {
+    scene.traverse((child: any) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.Group) {
+        child.castShadow = false;
+        child.receiveShadow = false;
+      }
+    });
+  }
 
   console.log('Interior objects added successfully. Total collision objects:', collisionObjects.length);
 
@@ -654,6 +724,10 @@ export function addInteriorObjects(
 
 // Setup warm interior lighting with point lights
 export function setupInteriorLighting(scene: any, THREE: any) {
+  // Detect mobile for performance optimization
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                   (window.innerWidth <= 768);
+  
   // Remove existing lights (keep only ambient from scene setup)
   const lightsToRemove: any[] = [];
   scene.traverse((child: any) => {
@@ -663,49 +737,64 @@ export function setupInteriorLighting(scene: any, THREE: any) {
   });
   lightsToRemove.forEach(light => scene.remove(light));
   
-  // Warm ambient light for interior
-  const ambientLight = new THREE.AmbientLight(0xFFF8E1, 0.8); // Warm white
+  // Warm ambient light for interior - brighter on mobile to compensate for fewer lights
+  const ambientLight = new THREE.AmbientLight(0xFFF8E1, isMobile ? 1.0 : 0.8); // Warm white
   scene.add(ambientLight);
   
-  // Soft warm point lights to highlight floor reflections
-  // Center light above coffee table
-  const centerLight = new THREE.PointLight(0xFFE5B4, 1.2, 15); // Warm yellow
-  centerLight.position.set(0, 3, 2);
-  centerLight.castShadow = true;
-  centerLight.shadow.mapSize.width = 1024;
-  centerLight.shadow.mapSize.height = 1024;
-  scene.add(centerLight);
-  
-  // Light above TV area (back wall)
-  const tvLight = new THREE.PointLight(0xFFE5B4, 1.0, 12);
-  tvLight.position.set(0, 3, 20);
-  tvLight.castShadow = true;
-  scene.add(tvLight);
-  
-  // Left side light
-  const leftLight = new THREE.PointLight(0xFFE5B4, 0.8, 12);
-  leftLight.position.set(-6, 3, 0);
-  leftLight.castShadow = true;
-  scene.add(leftLight);
-  
-  // Right side light
-  const rightLight = new THREE.PointLight(0xFFE5B4, 0.8, 12);
-  rightLight.position.set(6, 3, 0);
-  rightLight.castShadow = true;
-  scene.add(rightLight);
-  
-  // Light above dining area
-  const diningLight = new THREE.PointLight(0xFFE5B4, 0.9, 12);
-  diningLight.position.set(-8, 3, 8);
-  diningLight.castShadow = true;
-  scene.add(diningLight);
-  
-  // Light from window/doorway (natural light)
-  const windowLight = new THREE.DirectionalLight(0xFFF8E1, 0.6);
-  windowLight.position.set(-1, 2, -5); // From doorway
-  windowLight.castShadow = true;
-  windowLight.shadow.mapSize.width = 1024;
-  windowLight.shadow.mapSize.height = 1024;
-  scene.add(windowLight);
+  // On mobile, use fewer lights for better performance
+  if (isMobile) {
+    // Only essential lights on mobile
+    const centerLight = new THREE.PointLight(0xFFE5B4, 1.5, 20); // Brighter, larger range
+    centerLight.position.set(0, 3, 2);
+    centerLight.castShadow = false; // No shadows on mobile
+    scene.add(centerLight);
+    
+    const tvLight = new THREE.PointLight(0xFFE5B4, 1.2, 18);
+    tvLight.position.set(0, 3, 20);
+    tvLight.castShadow = false;
+    scene.add(tvLight);
+  } else {
+    // Full lighting setup for desktop
+    // Soft warm point lights to highlight floor reflections
+    // Center light above coffee table
+    const centerLight = new THREE.PointLight(0xFFE5B4, 1.2, 15); // Warm yellow
+    centerLight.position.set(0, 3, 2);
+    centerLight.castShadow = true;
+    centerLight.shadow.mapSize.width = 1024;
+    centerLight.shadow.mapSize.height = 1024;
+    scene.add(centerLight);
+    
+    // Light above TV area (back wall)
+    const tvLight = new THREE.PointLight(0xFFE5B4, 1.0, 12);
+    tvLight.position.set(0, 3, 20);
+    tvLight.castShadow = true;
+    scene.add(tvLight);
+    
+    // Left side light
+    const leftLight = new THREE.PointLight(0xFFE5B4, 0.8, 12);
+    leftLight.position.set(-6, 3, 0);
+    leftLight.castShadow = true;
+    scene.add(leftLight);
+    
+    // Right side light
+    const rightLight = new THREE.PointLight(0xFFE5B4, 0.8, 12);
+    rightLight.position.set(6, 3, 0);
+    rightLight.castShadow = true;
+    scene.add(rightLight);
+    
+    // Light above dining area
+    const diningLight = new THREE.PointLight(0xFFE5B4, 0.9, 12);
+    diningLight.position.set(-8, 3, 8);
+    diningLight.castShadow = true;
+    scene.add(diningLight);
+    
+    // Light from window/doorway (natural light)
+    const windowLight = new THREE.DirectionalLight(0xFFF8E1, 0.6);
+    windowLight.position.set(-1, 2, -5); // From doorway
+    windowLight.castShadow = true;
+    windowLight.shadow.mapSize.width = 1024;
+    windowLight.shadow.mapSize.height = 1024;
+    scene.add(windowLight);
+  }
 }
 

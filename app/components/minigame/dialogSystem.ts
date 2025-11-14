@@ -35,6 +35,45 @@ export class DialogSystem {
 
   // Advance to next message or skip typewriter
   advance() {
+    // Check if TV slide dialog just completed and user is tapping to advance to next slide
+    // This check must be done BEFORE processing normal dialog advance
+    // IMPORTANT: Only check if dialog is NOT active (already completed) to avoid interfering with normal dialog flow
+    if (!this.isActive() && (window as any).pendingTVSlideAdvance !== undefined && (window as any).pendingTVSlideAdvance !== null) {
+      const nextSlideIndex = (window as any).pendingTVSlideAdvance;
+      console.log('[DialogSystem] TV slide dialog completed, advancing to next slide:', nextSlideIndex);
+      
+      // Clear pending advance
+      (window as any).pendingTVSlideAdvance = null;
+      
+      // Clear current dialog state
+      this.messages = [];
+      this.currentMessageIndex = 0;
+      this.currentTextIndex = 0;
+      this.isTyping = false;
+      
+      // Trigger next slide
+      if ((window as any).tvNextSlide) {
+        (window as any).tvNextSlide();
+      } else {
+        // Fallback: directly call slideshow next
+        const setup = (window as any).setupRef;
+        if (setup && setup.scene) {
+          const tv = setup.scene.children.find((child: any) => child.userData && child.userData.type === 'tv');
+          if (tv && tv.userData.slideshow && tv.userData.slideshow.next) {
+            tv.userData.slideshow.next();
+            // Also trigger dialog for next slide
+            const storyFlow = (window as any).storyFlowRef;
+            if (storyFlow && storyFlow.showTVSlideDialog) {
+              setTimeout(() => {
+                storyFlow.showTVSlideDialog(nextSlideIndex);
+              }, 100);
+            }
+          }
+        }
+      }
+      return false; // Dialog is closed, no more messages
+    }
+    
     if (this.isTyping) {
       // Skip typewriter, show full text
       this.skipTypewriter();
@@ -138,6 +177,13 @@ export class DialogSystem {
   // Check if currently typing
   isCurrentlyTyping(): boolean {
     return this.isTyping;
+  }
+
+  // Check if current message text is fully displayed (typing finished for current message)
+  isCurrentMessageComplete(): boolean {
+    const currentMessage = this.messages[this.currentMessageIndex];
+    if (!currentMessage) return true;
+    return this.currentTextIndex >= currentMessage.text.length;
   }
 
   // Set skip held state (for held input)
@@ -354,27 +400,10 @@ export function createDialogUI(guideCharacter?: any, camera?: any, playerCharact
   dialogBox.style.userSelect = 'none'; // Prevent text selection
   dialogBox.style.display = 'flex';
   dialogBox.style.flexDirection = 'column';
+  dialogBox.style.overflow = 'hidden'; // Prevent dialog box itself from scrolling
   container.appendChild(dialogBox);
-  
-  // Store reference to dialog system for click handler
-  let dialogSystemRef: DialogSystem | null = null;
-  
-  // Click handler untuk dialog box - always allow tap to continue
-  const handleDialogClick = (e: Event) => {
-    e.stopPropagation();
-    e.preventDefault();
-    console.log('Dialog clicked! dialogSystemRef:', dialogSystemRef, 'isActive:', dialogSystemRef?.isActive());
-    if (dialogSystemRef && dialogSystemRef.isActive()) {
-      console.log('Calling advance()...');
-      const result = dialogSystemRef.advance();
-      console.log('Advance result:', result);
-    }
-  };
-  
-  dialogBox.addEventListener('click', handleDialogClick);
-  dialogBox.addEventListener('touchend', handleDialogClick);
 
-  // Text container (scrollable wrapper untuk text)
+  // Text container (scrollable wrapper untuk text) - dibuat dulu sebelum event listener
   const textContainer = document.createElement('div');
   textContainer.style.flex = '1';
   textContainer.style.overflowY = 'auto';
@@ -385,14 +414,194 @@ export function createDialogUI(guideCharacter?: any, camera?: any, playerCharact
   textContainer.style.paddingRight = '20px';
   textContainer.style.paddingTop = '5px';
   textContainer.style.paddingBottom = '5px';
-  // Smooth scrolling
-  textContainer.style.scrollBehavior = 'smooth';
+  // Smooth scrolling - DISABLED untuk instant scroll (tidak smooth untuk better performance)
+  textContainer.style.scrollBehavior = 'auto'; // Changed from 'smooth' to 'auto' for instant scroll
   // Custom scrollbar styling (optional, untuk better UX)
   textContainer.style.scrollbarWidth = 'thin';
   textContainer.style.scrollbarColor = '#999999 #f0f0f0';
   // Prevent text selection during scroll
   textContainer.style.userSelect = 'none';
+  // Pastikan text container bisa scroll dengan baik - OPTIMIZED untuk instant scroll
+  textContainer.style.webkitOverflowScrolling = 'touch'; // Smooth scroll di iOS
+  textContainer.style.touchAction = 'pan-y'; // Allow vertical scroll - CRITICAL untuk instant scroll
+  textContainer.style.willChange = 'scroll-position'; // Optimize for scrolling
+  textContainer.style.transform = 'translateZ(0)'; // Force hardware acceleration
+  
   dialogBox.appendChild(textContainer);
+
+  // Store reference to dialog system for click handler
+  let dialogSystemRef: DialogSystem | null = null;
+  
+  // Track touch events untuk membedakan scroll dan tap
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchMoved = false;
+  let touchStartTime = 0;
+  const TAP_THRESHOLD = 10; // pixels - jika movement < 10px, dianggap tap
+  const TAP_TIME_THRESHOLD = 300; // ms - jika waktu < 300ms dan tidak ada movement, dianggap tap
+  
+  // Touch start handler - track initial position dan waktu
+  const handleDialogTouchStart = (e: TouchEvent) => {
+    if (e.touches.length > 0) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchMoved = false;
+      touchStartTime = Date.now();
+      // Tidak perlu store scroll position karena browser akan handle scroll natural
+    }
+  };
+  
+  // Touch move handler - detect scroll (biarkan browser handle scroll natural)
+  const handleDialogTouchMove = (e: TouchEvent) => {
+    if (e.touches.length > 0) {
+      const deltaX = e.touches[0].clientX - touchStartX;
+      const deltaY = e.touches[0].clientY - touchStartY;
+      const absDeltaX = Math.abs(deltaX);
+      const absDeltaY = Math.abs(deltaY);
+      
+      // Jika movement > threshold, berarti user sedang scroll/drag
+      if (absDeltaX > TAP_THRESHOLD || absDeltaY > TAP_THRESHOLD) {
+        touchMoved = true;
+        // Biarkan browser handle scroll natural - jangan preventDefault
+        // Text container akan scroll secara natural karena overflowY: auto
+      }
+    }
+  };
+  
+  // Click handler untuk dialog box - hanya trigger jika benar-benar tap (bukan scroll)
+  const handleDialogClick = (e: Event) => {
+    // Untuk mouse click (desktop), langsung trigger
+    if (e.type === 'click') {
+      e.stopPropagation();
+      e.preventDefault();
+      console.log('Dialog clicked! dialogSystemRef:', dialogSystemRef, 'isActive:', dialogSystemRef?.isActive());
+      
+      if (dialogSystemRef) {
+        // Check if TV slide dialog just completed and we should advance to next slide
+        // This check is done BEFORE calling advance() to ensure we handle it correctly
+        if (!dialogSystemRef.isActive() && (window as any).pendingTVSlideAdvance !== undefined && (window as any).pendingTVSlideAdvance !== null) {
+          const nextSlideIndex = (window as any).pendingTVSlideAdvance;
+          console.log('[DialogSystem] TV slide dialog completed (dialog not active), advancing to next slide:', nextSlideIndex);
+          
+          // Clear pending advance
+          (window as any).pendingTVSlideAdvance = null;
+          
+          // Trigger next slide
+          if ((window as any).tvNextSlide) {
+            (window as any).tvNextSlide();
+          } else {
+            // Fallback: directly call slideshow next
+            const setup = (window as any).setupRef;
+            if (setup && setup.scene) {
+              const tv = setup.scene.children.find((child: any) => child.userData && child.userData.type === 'tv');
+              if (tv && tv.userData.slideshow && tv.userData.slideshow.next) {
+                tv.userData.slideshow.next();
+                // Also trigger dialog for next slide
+                const storyFlow = (window as any).storyFlowRef;
+                if (storyFlow && storyFlow.showTVSlideDialog) {
+                  setTimeout(() => {
+                    storyFlow.showTVSlideDialog(nextSlideIndex);
+                  }, 100);
+                }
+              }
+            }
+          }
+          return; // Don't process as normal dialog advance
+        }
+        
+        console.log('Calling advance()...');
+        const result = dialogSystemRef.advance();
+        console.log('Advance result:', result);
+      }
+    }
+  };
+  
+  // Touch end handler - hanya trigger jika bukan scroll
+  const handleDialogTouchEnd = (e: TouchEvent) => {
+    const touchEndTime = Date.now();
+    const touchDuration = touchEndTime - touchStartTime;
+    
+    // Hanya trigger tap jika:
+    // 1. Tidak ada movement yang signifikan (touchMoved = false)
+    // 2. Waktu touch cukup singkat (< 300ms) - untuk membedakan dari long press
+    if (!touchMoved && touchDuration < TAP_TIME_THRESHOLD) {
+      e.stopPropagation();
+      e.preventDefault();
+      console.log('Dialog tapped (not scrolled)! dialogSystemRef:', dialogSystemRef, 'isActive:', dialogSystemRef?.isActive());
+      
+      if (dialogSystemRef) {
+        // Check if TV slide dialog just completed and we should advance to next slide
+        // This check is done BEFORE calling advance() to ensure we handle it correctly
+        if (!dialogSystemRef.isActive() && (window as any).pendingTVSlideAdvance !== undefined && (window as any).pendingTVSlideAdvance !== null) {
+          const nextSlideIndex = (window as any).pendingTVSlideAdvance;
+          console.log('[DialogSystem] TV slide dialog completed (dialog not active), advancing to next slide:', nextSlideIndex);
+          
+          // Clear pending advance
+          (window as any).pendingTVSlideAdvance = null;
+          
+          // Trigger next slide
+          if ((window as any).tvNextSlide) {
+            (window as any).tvNextSlide();
+          } else {
+            // Fallback: directly call slideshow next
+            const setup = (window as any).setupRef;
+            if (setup && setup.scene) {
+              const tv = setup.scene.children.find((child: any) => child.userData && child.userData.type === 'tv');
+              if (tv && tv.userData.slideshow && tv.userData.slideshow.next) {
+                tv.userData.slideshow.next();
+                // Also trigger dialog for next slide
+                const storyFlow = (window as any).storyFlowRef;
+                if (storyFlow && storyFlow.showTVSlideDialog) {
+                  setTimeout(() => {
+                    storyFlow.showTVSlideDialog(nextSlideIndex);
+                  }, 100);
+                }
+              }
+            }
+          }
+          // Reset touch state
+          touchMoved = false;
+          touchStartTime = 0;
+          return; // Don't process as normal dialog advance
+        }
+        
+        console.log('Calling advance()...');
+        const result = dialogSystemRef.advance();
+        console.log('Advance result:', result);
+      }
+    } else {
+      // Ini adalah scroll, jangan trigger tap
+      console.log('Touch was scroll/drag, not triggering tap. Moved:', touchMoved, 'Duration:', touchDuration);
+    }
+    
+    // Reset untuk next touch
+    touchMoved = false;
+    touchStartTime = 0;
+  };
+  
+  // Mouse click handler (desktop) - langsung trigger
+  dialogBox.addEventListener('click', handleDialogClick);
+  
+  // Touch handlers untuk text container - biarkan scroll bekerja natural
+  textContainer.addEventListener('touchstart', handleDialogTouchStart, { passive: true });
+  textContainer.addEventListener('touchmove', handleDialogTouchMove, { passive: true }); // passive: true untuk allow natural scroll
+  textContainer.addEventListener('touchend', handleDialogTouchEnd);
+  
+  // Touch handlers untuk dialog box (area di luar text container) - untuk tap
+  dialogBox.addEventListener('touchstart', (e: TouchEvent) => {
+    // Hanya handle jika bukan di text container
+    const target = e.target as HTMLElement;
+    if (!textContainer.contains(target)) {
+      handleDialogTouchStart(e);
+    }
+  }, { passive: true });
+  dialogBox.addEventListener('touchend', (e: TouchEvent) => {
+    // Hanya handle jika bukan di text container
+    const target = e.target as HTMLElement;
+    if (!textContainer.contains(target)) {
+      handleDialogTouchEnd(e);
+    }
+  });
 
   // Text label (di dalam text container)
   const textLabel = document.createElement('div');
@@ -417,6 +626,9 @@ export function createDialogUI(guideCharacter?: any, camera?: any, playerCharact
   continueHint.textContent = 'Tap untuk melanjutkan';
   dialogBox.appendChild(continueHint);
 
+  // Auto-scroll management - simple logic: aktif saat typing, mati setelah selesai
+  let autoScrollInterval: number | null = null;
+  
   // Update function
   const update = (dialogSystem: DialogSystem) => {
     dialogSystemRef = dialogSystem; // Store reference for click handler
@@ -456,20 +668,45 @@ export function createDialogUI(guideCharacter?: any, camera?: any, playerCharact
         textLabel.textContent += '|';
       }
       
-      // Show/hide "Tap untuk melanjutkan" hint
-      // Show hint only when typewriter is finished (not typing)
-      if (!dialogSystem.isCurrentlyTyping()) {
-        // Typewriter finished, show hint
+      // Auto-scroll logic: aktif saat typing, mati setelah text selesai
+      // Sesuai requirement: awal dialog muncul autoscroll aktif, sampe text keluar semua autoscroll mati
+      // Setelah itu user bebas scroll manual atau tap, tidak ada intervensi
+      const isTyping = dialogSystem.isCurrentlyTyping();
+      const isTextComplete = dialogSystem.isCurrentMessageComplete();
+      
+      if (isTyping && !isTextComplete) {
+        // Typewriter sedang berjalan dan text belum selesai - aktifkan auto-scroll
+        continueHint.style.display = 'none';
+        
+        // Start auto-scroll interval jika belum ada
+        if (autoScrollInterval === null) {
+          autoScrollInterval = window.setInterval(() => {
+            // Auto-scroll ke bottom saat typing (hanya jika masih typing dan belum selesai)
+            if (dialogSystemRef && dialogSystemRef.isCurrentlyTyping() && !dialogSystemRef.isCurrentMessageComplete()) {
+              const maxScrollTop = textContainer.scrollHeight - textContainer.clientHeight;
+              if (maxScrollTop > 0) {
+                textContainer.scrollTop = textContainer.scrollHeight;
+              }
+            } else {
+              // Text sudah selesai, stop interval (auto-stop)
+              if (autoScrollInterval !== null) {
+                clearInterval(autoScrollInterval);
+                autoScrollInterval = null;
+              }
+            }
+          }, 50); // Update setiap 50ms untuk smooth auto-scroll
+        }
+      } else {
+        // Typewriter selesai atau text sudah lengkap - matikan auto-scroll
+        // Tidak ada final scroll, user bebas scroll atau tap
         continueHint.style.display = 'block';
         
-        // Auto-scroll to bottom when typewriter finishes (untuk text panjang)
-        // Small delay untuk memastikan text sudah di-render
-        setTimeout(() => {
-          textContainer.scrollTop = textContainer.scrollHeight;
-        }, 100);
-      } else {
-        // Still typing, hide hint
-        continueHint.style.display = 'none';
+        // Stop auto-scroll interval (pastikan benar-benar di-clear)
+        if (autoScrollInterval !== null) {
+          clearInterval(autoScrollInterval);
+          autoScrollInterval = null;
+        }
+        // Tidak ada final scroll - user bebas setelah text selesai
       }
     }
   };

@@ -149,7 +149,10 @@ export function createCeramicTileFloor(scene: any, THREE: any, houseBounds: { xM
   const floor = new THREE.Mesh(floorGeometry, floorMaterial);
   floor.rotation.x = -Math.PI / 2; // Lay flat
   floor.position.set(floorCenterX, 0.001, floorCenterZ); // Slightly above ground to avoid z-fighting
-  floor.receiveShadow = true;
+  // Detect mobile for performance optimization
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                   (typeof window !== 'undefined' && window.innerWidth <= 768);
+  floor.receiveShadow = !isMobile; // Disable shadows on mobile
   floor.renderOrder = -1; // Render first
   
   return floor;

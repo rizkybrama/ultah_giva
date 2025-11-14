@@ -19,6 +19,9 @@ export function createLilyBouquet(
     metalness: 0.1
   });
   const vase = new THREE.Mesh(vaseGeometry, vaseMaterial);
+  // Vase height is 0.3, center is at 0.15 from bottom
+  // Group is positioned at table top (y: 0.55), so vase center relative to group should be 0.15
+  // This places vase bottom at table top (0.55) and center at 0.7 in world space
   vase.position.set(0, 0.15, 0);
   vase.castShadow = true;
   vase.receiveShadow = true;
@@ -184,15 +187,16 @@ export function createLilyBouquet(
     };
     
     // Create lily flower icon/image
-    const lilyIcon = document.createElement('div');
-    lilyIcon.style.width = '80px';
-    lilyIcon.style.height = '80px';
+    const lilyIcon = document.createElement('img');
+    lilyIcon.src = '/images/lily.jpeg';
+    lilyIcon.alt = 'Lily Flower';
+    // lilyIcon.style.width = '80px';
+    // lilyIcon.style.height = '80px';
     lilyIcon.style.margin = '0 auto 15px auto';
-    lilyIcon.style.display = 'flex';
-    lilyIcon.style.alignItems = 'center';
-    lilyIcon.style.justifyContent = 'center';
-    lilyIcon.style.fontSize = '60px';
-    lilyIcon.textContent = '🌸'; // Lily flower emoji
+    lilyIcon.style.display = 'block';
+    lilyIcon.style.objectFit = 'cover';
+    lilyIcon.style.borderRadius = '8px';
+    lilyIcon.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
     
     tooltipElement.innerHTML = `
       <div style="font-weight: bold; font-size: 18px; color: #8B7355; margin-bottom: 10px;">

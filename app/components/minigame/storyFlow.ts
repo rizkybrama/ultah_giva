@@ -2,6 +2,8 @@
 
 import { DialogSystem, type DialogMessage } from './dialogSystem';
 import type { MediaItem } from './tvSlideshow';
+import { config } from '../../config';
+import { tvSlideshowConfig } from './tvSlideshowConfig';
 
 export enum StoryState {
   CUTSCENE = 'cutscene',
@@ -29,6 +31,7 @@ export class StoryFlow {
   private tvSlideDialogs: DialogMessage[][] = []; // Dialog untuk setiap slide TV
   private currentTVSlideDialog: number | null = null; // Index slide yang sedang menampilkan dialog
   private tvSlideDialogSkippable: boolean = true; // Dialog bisa di-skip
+  private tvSlideDialogJustCompleted: boolean = false; // Flag untuk menandai dialog TV slide baru saja selesai
 
   constructor(dialogSystem: DialogSystem, onStateChange?: (state: StoryState) => void) {
     this.dialogSystem = dialogSystem;
@@ -281,11 +284,11 @@ export class StoryFlow {
     const messages: DialogMessage[] = [
       {
         speaker: 'Giva',
-        text: 'Waaah... lucunya rumahnya 🥺 pastel banget kayak warna kesukaanku~'
+        text: 'Waaah... lucunyaa 🥺'
       },
       {
         speaker: 'Erbe',
-        text: 'Hehehe, pantes kan? Ayo masuk, aku pengen kamu lihat satu-satu.'
+        text: 'Hehehe, lucu kan, ayo ayang, aku pengen kamu lihat satu-satu.'
       },
       {
         speaker: 'Giva',
@@ -293,7 +296,7 @@ export class StoryFlow {
       },
       {
         speaker: 'Erbe',
-        text: 'Selamat ulang tahun ayanggg, selamat bertambah level dalam kehidupan ini, semoga semua yang kamu harapkan dapat terwujud dan berjalan dengan baik, semoga panjang umur dan kuat dalam menjalani hari-hari, luvyuu ayang, tetap hidup dan sehat bersama ya sama aku selamanya, semoga kita bisa menikah di tahun depan, luvyuuuu ayang, muah muah :3'
+        text: 'Iya sayanggg puhahahahah'
       }
     ];
     
@@ -311,10 +314,10 @@ export class StoryFlow {
     const sequence = [
       { state: StoryState.INTERIOR_LETTER, target: 'letter', position: { x: -5, y: 0.5, z: 0 } }, // Di depan meja surat, bukan di tengah
       { state: StoryState.INTERIOR_TV, target: 'tv', position: { x: 0, y: 0.5, z: 17 } }, // Di depan TV (TV ada di z: 20.1, jadi posisi z: 17 = 3 unit di depan TV)
-      { state: StoryState.INTERIOR_LILY, target: 'lily', position: { x: 6, y: 0.5, z: 0 } },
+      { state: StoryState.INTERIOR_LILY, target: 'lily', position: { x: 6, y: 0.5, z: -1.2 } }, // Di depan meja vas bunga, tidak menembus meja
       { state: StoryState.INTERIOR_CAKE, target: 'cake', position: { x: 0, y: 0.5, z: 0.5 } }, // Di depan kue, bukan di tengah kue
       { state: StoryState.INTERIOR_GIFTS, target: 'gifts', position: { x: 0, y: 0.5, z: 0.5 } }, // Di depan kue juga, bukan di tengah kue
-      { state: StoryState.INTERIOR_BED, target: 'bed', position: { x: -2, y: 0.5, z: 4 } } // Dari sisi kiri kasur, menghindari meja di tengah
+      { state: StoryState.INTERIOR_BED, target: 'bed', position: { x: -2.5, y: 0.5, z: 4.5 } } // Dari sisi KIRI kasur (x negatif), JAUH dari meja kue yang ada di sisi kanan
     ];
 
     if (this.currentSequenceIndex >= sequence.length) {
@@ -334,13 +337,52 @@ export class StoryFlow {
     const player = playerRef?.current || playerRef;
     if (player) {
       const playerPos = player.position;
-      const distance = Math.sqrt(
+      let distance = Math.sqrt(
         Math.pow(playerPos.x - current.position.x, 2) + 
         Math.pow(playerPos.z - current.position.z, 2)
       );
       
-      // If already close enough (within 1.5 units), skip auto-walk
-      if (distance < 1.5) {
+      // For lily, also check distance to actual lily position
+      if (current.target === 'lily') {
+        const lilyPosition = { x: 6, y: 0.55, z: 0 }; // Actual lily bouquet position
+        const distanceToLily = Math.sqrt(
+          Math.pow(playerPos.x - lilyPosition.x, 2) + 
+          Math.pow(playerPos.z - lilyPosition.z, 2)
+        );
+        // Use the closer distance (either to target or to lily)
+        distance = Math.min(distance, distanceToLily);
+        console.log('[StoryFlow] Distance to lily target:', distance, 'distance to lily bouquet:', distanceToLily);
+      }
+      
+      // For bed, also check distance to actual bed position
+      // But only skip auto-walk if player is on the LEFT side of bed (x < -1.0, away from cake table)
+      if (current.target === 'bed') {
+        const bedPosition = { x: 0, y: 0.4, z: 4 }; // Actual bed center position
+        const distanceToBed = Math.sqrt(
+          Math.pow(playerPos.x - bedPosition.x, 2) + 
+          Math.pow(playerPos.z - bedPosition.z, 2)
+        );
+        // Use the closer distance (either to target or to bed)
+        distance = Math.min(distance, distanceToBed);
+        // x < -1.0 ensures player is clearly on left side, away from cake table at x: 0
+        const isOnLeftSide = playerPos.x < -1.0; // Left side of bed (away from cake table)
+        console.log('[StoryFlow] Distance to bed target:', distance, 'distance to bed center:', distanceToBed, 'isOnLeftSide:', isOnLeftSide, 'player x:', playerPos.x);
+        
+        // Only skip auto-walk if close enough AND on left side
+        if (distance < 2.0 && isOnLeftSide) {
+          console.log('[StoryFlow] Player already close to bed on LEFT side (distance:', distance, '), skipping auto-walk');
+          setTimeout(() => {
+            this.triggerInteraction(current.target);
+          }, 300);
+          return;
+        }
+        // If on right side (where cake table is) or not close enough, continue with auto-walk
+        console.log('[StoryFlow] Player NOT on left side or not close enough, continuing auto-walk to LEFT side of bed');
+      }
+      
+      // If already close enough (within 1.5 units for target, or 2.5 units for lily), skip auto-walk
+      const closeEnough = current.target === 'lily' ? distance < 2.5 : distance < 1.5;
+      if (closeEnough) {
         console.log('[StoryFlow] Player already close to target (distance:', distance, '), skipping auto-walk');
         setTimeout(() => {
           this.triggerInteraction(current.target);
@@ -352,14 +394,44 @@ export class StoryFlow {
     // Auto-walk to target
     this.autoWalkToTarget(current.position, () => {
       console.log('[StoryFlow] Reached target, triggering interaction:', current.target);
-      // Trigger interaction based on type
+      
+      // For bed, verify player is actually on LEFT side before triggering
+      if (current.target === 'bed') {
+        const playerRef = (window as any).playerRef;
+        const player = playerRef?.current || playerRef;
+        if (player) {
+          const playerPos = player.position;
+          const isOnLeftSide = playerPos.x < -1.0; // Left side of bed (away from cake table)
+          console.log('[StoryFlow] Before triggering bed interaction, checking position. Player x:', playerPos.x, 'isOnLeftSide:', isOnLeftSide);
+          
+          if (!isOnLeftSide) {
+            console.warn('[StoryFlow] Player NOT on left side yet (x:', playerPos.x, '), continuing auto-walk...');
+            // Continue auto-walk until player reaches left side
+            this.autoWalkToTarget(current.position, () => {
+              // Check again
+              const newPlayerPos = player.position;
+              const newIsOnLeftSide = newPlayerPos.x < -1.0;
+              if (newIsOnLeftSide) {
+                console.log('[StoryFlow] Player now on left side (x:', newPlayerPos.x, '), triggering interaction');
+                this.triggerInteraction(current.target);
+              } else {
+                console.warn('[StoryFlow] Player still not on left side (x:', newPlayerPos.x, '), forcing interaction anyway');
+                this.triggerInteraction(current.target);
+              }
+            }, current.target);
+            return;
+          }
+        }
+      }
+      
+      // Trigger interaction - distance check already done in autoWalkToTarget for lily
       this.triggerInteraction(current.target);
-    });
+    }, current.target);
   }
 
   // Auto-walk to target position
-  private autoWalkToTarget(target: { x: number; y: number; z: number }, onComplete: () => void) {
-    console.log('[StoryFlow] autoWalkToTarget called, target:', target);
+  private autoWalkToTarget(target: { x: number; y: number; z: number }, onComplete: () => void, targetType?: string) {
+    console.log('[StoryFlow] autoWalkToTarget called, target:', target, 'targetType:', targetType);
     const playerRef = (window as any).playerRef;
     const player = playerRef?.current || playerRef;
     
@@ -369,9 +441,17 @@ export class StoryFlow {
       (window as any).autoWalkActive = true;
       (window as any).autoWalkSpeed = 0.15;
       
+      // For lily, also track distance to actual lily bouquet position
+      const lilyPosition = targetType === 'lily' ? { x: 6, y: 0.55, z: 0 } : null;
+      
+      // For bed, also track distance to actual bed position
+      const bedPosition = targetType === 'bed' ? { x: 0, y: 0.4, z: 4 } : null;
+      
       // Wait for arrival with timeout
       let checkCount = 0;
       const maxChecks = 300; // Max 30 seconds
+      let lastDistance = Infinity;
+      let stuckCount = 0; // Count how many times player is stuck at same distance
       const checkInterval = setInterval(() => {
         checkCount++;
         const autoWalkActive = (window as any).autoWalkActive;
@@ -381,23 +461,97 @@ export class StoryFlow {
           Math.pow(playerPos.z - target.z, 2)
         );
         
-        if (!autoWalkActive || distance < 0.5) {
-          console.log('[StoryFlow] Auto-walk completed, distance:', distance);
+        // For lily, also check distance to actual lily bouquet
+        let distanceToObject = distance;
+        if (lilyPosition) {
+          const distanceToLily = Math.sqrt(
+            Math.pow(playerPos.x - lilyPosition.x, 2) + 
+            Math.pow(playerPos.z - lilyPosition.z, 2)
+          );
+          distanceToObject = Math.min(distance, distanceToLily);
+          // If close enough to lily bouquet (within 1.5 units), trigger immediately
+          if (distanceToLily < 1.5) {
+            console.log('[StoryFlow] Close enough to lily bouquet (distance:', distanceToLily, '), triggering interaction immediately');
+            clearInterval(checkInterval);
+            (window as any).autoWalkActive = false;
+            setTimeout(onComplete, 300);
+            return;
+          }
+        }
+        
+        // For bed, also check distance to actual bed position
+        // But only trigger if player is on the LEFT side of bed (x < -1.0) to avoid triggering from right side where cake table is
+        if (bedPosition) {
+          const distanceToBed = Math.sqrt(
+            Math.pow(playerPos.x - bedPosition.x, 2) + 
+            Math.pow(playerPos.z - bedPosition.z, 2)
+          );
+          distanceToObject = Math.min(distance, distanceToBed);
+          // If close enough to bed (within 1.8 units) AND on the LEFT side (x < -1.0), trigger immediately
+          // x < -1.0 ensures player is clearly on left side, away from cake table at x: 0
+          const isOnLeftSide = playerPos.x < -1.0; // Left side of bed (away from cake table)
+          if (distanceToBed < 1.8 && isOnLeftSide) {
+            console.log('[StoryFlow] Close enough to bed on LEFT side (distance:', distanceToBed, ', x:', playerPos.x, '), triggering interaction immediately');
+            clearInterval(checkInterval);
+            (window as any).autoWalkActive = false;
+            setTimeout(onComplete, 300);
+            return;
+          }
+        }
+        
+        // Check if player is stuck (not moving closer)
+        if (Math.abs(distanceToObject - lastDistance) < 0.05) {
+          stuckCount++;
+        } else {
+          stuckCount = 0;
+        }
+        lastDistance = distanceToObject;
+        
+        // If close enough (within 1.2 units) or stuck close enough, trigger interaction
+        // For bed, also check if player is on LEFT side
+        let closeEnough = targetType === 'lily' ? distanceToObject < 2.0 : 
+                           targetType === 'bed' ? distanceToObject < 2.0 : 
+                           distanceToObject < 1.2;
+        
+        // For bed, must be on LEFT side (x < -1.0) to be considered "close enough"
+        if (targetType === 'bed' && closeEnough) {
+          const isOnLeftSide = playerPos.x < -1.0;
+          if (!isOnLeftSide) {
+            closeEnough = false; // Not close enough if not on left side
+            console.log('[StoryFlow] Player close to bed but NOT on left side (x:', playerPos.x, '), continuing auto-walk...');
+          }
+        }
+        
+        if (!autoWalkActive || closeEnough || (stuckCount > 10 && distanceToObject < 2.0 && (targetType !== 'bed' || playerPos.x < -1.0))) {
+          console.log('[StoryFlow] Auto-walk completed, distance:', distanceToObject, 'stuckCount:', stuckCount, 'targetType:', targetType, 'player x:', playerPos.x);
           clearInterval(checkInterval);
           (window as any).autoWalkActive = false; // Ensure auto-walk is stopped
-          setTimeout(onComplete, 500);
+          setTimeout(onComplete, 300);
         } else if (checkCount >= maxChecks) {
-          console.warn('[StoryFlow] Auto-walk timeout, forcing completion. Final distance:', distance, 'Player pos:', playerPos, 'Target:', target);
+          console.warn('[StoryFlow] Auto-walk timeout, forcing completion. Final distance:', distanceToObject, 'Player pos:', playerPos, 'Target:', target);
           clearInterval(checkInterval);
           (window as any).autoWalkActive = false;
-          // If stuck but close enough (within 1.5 units), proceed anyway
-          if (distance < 1.5) {
-            console.log('[StoryFlow] Close enough despite timeout, proceeding with interaction');
-            setTimeout(onComplete, 500);
+          
+          // For bed, must be on LEFT side even if timeout
+          if (targetType === 'bed') {
+            const isOnLeftSide = playerPos.x < -1.0;
+            if (isOnLeftSide && distanceToObject < 2.0) {
+              console.log('[StoryFlow] Close enough to bed on LEFT side despite timeout, proceeding with interaction');
+              setTimeout(onComplete, 300);
+            } else {
+              console.warn('[StoryFlow] Timeout but player NOT on left side (x:', playerPos.x, '), forcing interaction anyway');
+              setTimeout(onComplete, 300);
+            }
           } else {
-            // Too far, but proceed anyway to avoid getting stuck
-            console.warn('[StoryFlow] Too far from target, proceeding anyway to avoid stuck');
-            setTimeout(onComplete, 500);
+            // If stuck but close enough (within 2.0 units), proceed anyway
+            if (distanceToObject < 2.0) {
+              console.log('[StoryFlow] Close enough despite timeout, proceeding with interaction');
+              setTimeout(onComplete, 300);
+            } else {
+              // Too far, but proceed anyway to avoid getting stuck
+              console.warn('[StoryFlow] Too far from target, proceeding anyway to avoid stuck');
+              setTimeout(onComplete, 300);
+            }
           }
         }
       }, 100);
@@ -480,7 +634,12 @@ export class StoryFlow {
   private showLetterContent(onClose?: () => void) {
     console.log('[StoryFlow] showLetterContent called');
     
-    // Create letter content modal/overlay
+    // Set isReadingLetter to true when letter opens
+    if ((window as any).setIsReadingLetter) {
+      (window as any).setIsReadingLetter(true);
+    }
+    
+    // Create letter content modal/overlay with NewGamePage style background
     const letterOverlay = document.createElement('div');
     letterOverlay.setAttribute('data-letter-overlay', 'true');
     letterOverlay.style.position = 'fixed';
@@ -488,22 +647,127 @@ export class StoryFlow {
     letterOverlay.style.left = '0';
     letterOverlay.style.width = '100%';
     letterOverlay.style.height = '100%';
-    letterOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    letterOverlay.style.background = 'linear-gradient(to bottom, #FFE5E5, #FFD6E5)';
     letterOverlay.style.zIndex = '3000';
     letterOverlay.style.display = 'flex';
     letterOverlay.style.alignItems = 'center';
     letterOverlay.style.justifyContent = 'center';
     letterOverlay.style.pointerEvents = 'auto';
+    letterOverlay.style.overflow = 'hidden';
     
-    // Letter paper
+    // Add decorative elements like NewGamePage
+    const decorativeContainer = document.createElement('div');
+    decorativeContainer.style.position = 'absolute';
+    decorativeContainer.style.inset = '0';
+    decorativeContainer.style.pointerEvents = 'none';
+    decorativeContainer.style.overflow = 'hidden';
+    
+    // Shooting star - top left
+    const shootingStar = document.createElement('div');
+    shootingStar.style.position = 'absolute';
+    shootingStar.style.top = '40px';
+    shootingStar.style.left = '40px';
+    shootingStar.style.transform = 'rotate(-45deg)';
+    shootingStar.innerHTML = `
+      <div style="color: white; font-size: 24px;">⭐</div>
+      <div style="position: absolute; top: 8px; left: 8px; width: 32px; height: 2px; background: white; opacity: 0.6; transform: rotate(45deg);"></div>
+      <div style="position: absolute; top: 4px; left: 4px; width: 8px; height: 8px; background: white; border-radius: 50%; opacity: 0.4;"></div>
+      <div style="position: absolute; top: 12px; left: 12px; width: 4px; height: 4px; background: white; border-radius: 50%; opacity: 0.5;"></div>
+    `;
+    decorativeContainer.appendChild(shootingStar);
+    
+    // Heart - top right
+    const heartTopRight = document.createElement('div');
+    heartTopRight.style.position = 'absolute';
+    heartTopRight.style.top = '48px';
+    heartTopRight.style.right = '64px';
+    heartTopRight.style.fontSize = '20px';
+    heartTopRight.textContent = '💖';
+    heartTopRight.style.color = 'rgba(255, 192, 203, 0.8)';
+    decorativeContainer.appendChild(heartTopRight);
+    
+    // Sparkle - mid left
+    const sparkle = document.createElement('div');
+    sparkle.style.position = 'absolute';
+    sparkle.style.top = '33%';
+    sparkle.style.left = '48px';
+    sparkle.style.fontSize = '14px';
+    sparkle.textContent = '✨';
+    sparkle.style.color = 'white';
+    sparkle.style.opacity = '0.7';
+    decorativeContainer.appendChild(sparkle);
+    
+    // Glowing heart - mid right
+    const glowingHeart = document.createElement('div');
+    glowingHeart.style.position = 'absolute';
+    glowingHeart.style.top = '50%';
+    glowingHeart.style.right = '80px';
+    glowingHeart.style.fontSize = '18px';
+    glowingHeart.textContent = '💕';
+    glowingHeart.style.color = 'rgba(255, 182, 193, 0.8)';
+    glowingHeart.style.filter = 'drop-shadow(0 0 4px rgba(255, 182, 193, 0.6))';
+    decorativeContainer.appendChild(glowingHeart);
+    
+    // Petals scattered
+    for (let i = 0; i < 8; i++) {
+      const petal = document.createElement('div');
+      petal.style.position = 'absolute';
+      petal.style.left = `${10 + Math.random() * 80}%`;
+      petal.style.top = `${10 + Math.random() * 80}%`;
+      petal.style.width = `${8 + Math.random() * 12}px`;
+      petal.style.height = `${8 + Math.random() * 12}px`;
+      petal.style.borderRadius = '50%';
+      petal.style.opacity = '0.4';
+      petal.style.background = 'linear-gradient(135deg, #FFF5E6, #FFE5E5)';
+      petal.style.animation = `float ${15 + Math.random() * 10}s infinite ease-in-out`;
+      petal.style.animationDelay = `${Math.random() * 5}s`;
+      decorativeContainer.appendChild(petal);
+    }
+    
+    // Small dots
+    for (let i = 0; i < 5; i++) {
+      const dot = document.createElement('div');
+      dot.style.position = 'absolute';
+      dot.style.left = `${Math.random() * 100}%`;
+      dot.style.top = `${Math.random() * 100}%`;
+      dot.style.width = '4px';
+      dot.style.height = '4px';
+      dot.style.background = 'white';
+      dot.style.borderRadius = '50%';
+      dot.style.opacity = '0.3';
+      decorativeContainer.appendChild(dot);
+    }
+    
+    // Add float animation style
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes float {
+        0%, 100% {
+          transform: translateY(0) rotate(0deg);
+        }
+        50% {
+          transform: translateY(-20px) rotate(180deg);
+        }
+      }
+    `;
+    decorativeContainer.appendChild(style);
+    
+    letterOverlay.appendChild(decorativeContainer);
+    
+    // Letter paper - with better contrast for NewGamePage style background
     const letterPaper = document.createElement('div');
-    letterPaper.style.backgroundColor = '#F5F5F5';
+    letterPaper.style.backgroundColor = '#FFFFFF';
     letterPaper.style.padding = '40px';
-    letterPaper.style.borderRadius = '10px';
+    letterPaper.style.borderRadius = '15px';
     letterPaper.style.maxWidth = '500px';
     letterPaper.style.width = '90%';
-    letterPaper.style.boxShadow = '0 10px 40px rgba(0, 0, 0, 0.3)';
+    letterPaper.style.maxHeight = '80vh'; // Batas tinggi seperti dialog
+    letterPaper.style.boxShadow = '0 10px 40px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 182, 193, 0.1)';
     letterPaper.style.position = 'relative';
+    letterPaper.style.display = 'flex';
+    letterPaper.style.flexDirection = 'column';
+    letterPaper.style.overflow = 'hidden'; // Prevent letterPaper itself from scrolling
+    letterPaper.style.zIndex = '1'; // Ensure it's above decorative elements
     
     // Close button
     const closeButton = document.createElement('button');
@@ -537,15 +801,21 @@ export class StoryFlow {
     };
     letterPaper.appendChild(closeButton);
     
-    // Handwriting icon (animated)
-    const handIcon = document.createElement('div');
-    handIcon.textContent = '✍️';
-    handIcon.style.position = 'absolute';
-    handIcon.style.top = '20px';
-    handIcon.style.left = '20px';
-    handIcon.style.fontSize = '30px';
-    handIcon.style.animation = 'bounce 1s infinite';
-    letterPaper.appendChild(handIcon);
+    // Letter text container (scrollable, seperti dialog)
+    const letterTextContainer = document.createElement('div');
+    letterTextContainer.style.flex = '1';
+    letterTextContainer.style.overflowY = 'auto';
+    letterTextContainer.style.overflowX = 'hidden';
+    letterTextContainer.style.minHeight = '200px';
+    letterTextContainer.style.maxHeight = 'calc(80vh - 100px)'; // Max height dengan padding untuk close button
+    letterTextContainer.style.paddingTop = '40px';
+    letterTextContainer.style.paddingBottom = '20px';
+    letterTextContainer.style.scrollBehavior = 'auto';
+    (letterTextContainer.style as any).webkitOverflowScrolling = 'touch'; // iOS smooth scroll
+    letterTextContainer.style.touchAction = 'pan-y';
+    letterTextContainer.style.willChange = 'scroll-position';
+    letterTextContainer.style.transform = 'translateZ(0)';
+    letterPaper.appendChild(letterTextContainer);
     
     // Letter text (with typewriter effect)
     const letterText = document.createElement('div');
@@ -553,30 +823,49 @@ export class StoryFlow {
     letterText.style.lineHeight = '1.8';
     letterText.style.color = '#333';
     letterText.style.fontFamily = 'serif';
-    letterText.style.minHeight = '200px';
-    letterText.style.paddingTop = '40px';
-    letterPaper.appendChild(letterText);
+    letterText.style.whiteSpace = 'pre-wrap'; // CRITICAL: preserve newlines and wrap text
+    letterTextContainer.appendChild(letterText);
     
-    const fullLetterText = `Untuk Giva,
-
-Di setiap tawa kamu, aku nemuin alasan buat bertahan.
-
-Selamat ulang tahun, ya.
+    const fullLetterText = `Alo ayanggg,
+Kamu lagi sakit yah? Lagi sariawan ya, maaf ya kalo aku malah ga memperbaiki suasana, tapi malah bikin kamu tambah badmood, aku beliin degirol karena itu yang paling aman
+Berharap kamu lekas sembuh ayang biar kita bisa happy bareng, get well soon :)
+Btw, selamat ulang tahun ayangggkuuu, ini aku buat dengan keisengan dan waktu yang sangat minim, jadi maapin ya kalo grafiknya kek one for all wkwk
+Dannn...
+Selamat bertambah level dalam kehidupan kamu, semoga tambah dewasa dalam mengelola semuanya
+Semoga semua yang kamu harapkan dapat segera terkabul, semoga panjang umur bareng aku dan kuat dalam menjalani hari-hari entah apapun yang terjadi
+Luvyuu ayang, tetap hidup dan sehat terus sama aku selamanya, semoga kita bisa menikah di tahun depan, luvyuuuu ayang, muah muah :3
 
 — Erbe 💖`;
+    
+    // Auto-scroll management - aktif saat typing, mati setelah selesai (seperti dialog)
+    let letterAutoScrollInterval: number | null = null;
     
     // Typewriter effect
     let currentIndex = 0;
     let typeInterval: number | null = null;
     const startTypewriter = () => {
+      // Start auto-scroll saat typing dimulai
+      if (letterAutoScrollInterval === null) {
+        letterAutoScrollInterval = window.setInterval(() => {
+          // Auto-scroll ke bottom saat typing
+          const maxScrollTop = letterTextContainer.scrollHeight - letterTextContainer.clientHeight;
+          if (maxScrollTop > 0) {
+            letterTextContainer.scrollTop = letterTextContainer.scrollHeight;
+          }
+        }, 50); // Update setiap 50ms untuk smooth auto-scroll
+      }
+      
       typeInterval = window.setInterval(() => {
         if (currentIndex < fullLetterText.length) {
           letterText.textContent = fullLetterText.slice(0, currentIndex + 1);
           currentIndex++;
         } else {
+          // Text selesai - matikan auto-scroll
           if (typeInterval) clearInterval(typeInterval);
-          // Hide hand icon when done
-          handIcon.style.display = 'none';
+          if (letterAutoScrollInterval !== null) {
+            clearInterval(letterAutoScrollInterval);
+            letterAutoScrollInterval = null;
+          }
         }
       }, 50); // 50ms per character
     };
@@ -589,12 +878,15 @@ Selamat ulang tahun, ya.
     // Function to close letter and call callback
     const closeLetter = () => {
       if (typeInterval) clearInterval(typeInterval);
-      if (autoCloseTimer) clearTimeout(autoCloseTimer);
       letterOverlay.style.opacity = '0';
       letterOverlay.style.transition = 'opacity 0.3s';
       setTimeout(() => {
         if (letterOverlay.parentNode) {
           document.body.removeChild(letterOverlay);
+        }
+        // Set isReadingLetter to false when letter closes
+        if ((window as any).setIsReadingLetter) {
+          (window as any).setIsReadingLetter(false);
         }
         // IMPORTANT: Call onClose callback immediately after closing
         if (onClose) {
@@ -604,101 +896,16 @@ Selamat ulang tahun, ya.
       }, 300);
     };
     
-    // Auto-close after animation completes + display time (optional, user can close manually)
-    const autoCloseTimer = window.setTimeout(() => {
-      if (letterOverlay.parentNode) {
-        closeLetter();
-      }
-    }, fullLetterText.length * 50 + 5000); // Animation time + 5 seconds display
-    
-    // Clear auto-close if user closes manually, and call callback
+    // Surat hanya bisa di-close dengan tombol close, tidak ada auto-close
     closeButton.onclick = () => {
       closeLetter();
     };
   }
 
   // Setup dialog untuk setiap slide TV
+  // Menggunakan konfigurasi dari tvSlideshowConfig.ts
   private setupTVSlideDialogs() {
-    // Dialog untuk setiap slide (11 gambar: giva-1 sampai giva-11)
-    this.tvSlideDialogs = [
-      // Slide 0 (giva-1)
-      [
-        {
-          speaker: 'Erbe',
-          text: 'Ini waktu pertama kali kita ketemu, inget gak? 😊'
-        }
-      ],
-      // Slide 1 (giva-2)
-      [
-        {
-          speaker: 'Erbe',
-          text: 'Dan ini waktu kita jalan-jalan ke taman, kamu seneng banget liat bunga-bunganya 🌸'
-        }
-      ],
-      // Slide 2 (giva-3)
-      [
-        {
-          speaker: 'Erbe',
-          text: 'Ini waktu kita makan bareng, kamu ketawa terus karena aku salah pesen 😂'
-        }
-      ],
-      // Slide 3 (giva-4)
-      [
-        {
-          speaker: 'Erbe',
-          text: 'Lihat tuh, kamu lagi senyum-senyum sendiri sambil liat foto kita 💕'
-        }
-      ],
-      // Slide 4 (giva-5)
-      [
-        {
-          speaker: 'Erbe',
-          text: 'Ini waktu kita foto bareng pertama kali, kamu malu-malu tapi tetep mau 😄'
-        }
-      ],
-      // Slide 5 (giva-6)
-      [
-        {
-          speaker: 'Erbe',
-          text: 'Dan ini waktu kita ke pantai, kamu seneng banget main air laut 🌊'
-        }
-      ],
-      // Slide 6 (giva-7)
-      [
-        {
-          speaker: 'Erbe',
-          text: 'Ini waktu kita makan es krim, kamu pilih yang warna pink terus ketawa sendiri 🍦'
-        }
-      ],
-      // Slide 7 (giva-8)
-      [
-        {
-          speaker: 'Erbe',
-          text: 'Lihat tuh, kamu lagi baca buku sambil duduk di taman, cantik banget 📖'
-        }
-      ],
-      // Slide 8 (giva-9)
-      [
-        {
-          speaker: 'Erbe',
-          text: 'Ini waktu kita foto di sunset, kamu bilang "paling cantik ya sunset hari ini" 🌅'
-        }
-      ],
-      // Slide 9 (giva-10)
-      [
-        {
-          speaker: 'Erbe',
-          text: 'Dan ini waktu kita ke kafe favorit kamu, kamu pesen yang sama terus 😆'
-        }
-      ],
-      // Slide 10 (giva-11)
-      [
-        {
-          speaker: 'Erbe',
-          text: 'Ini kenangan terakhir kita sebelum ulang tahun kamu, semoga kamu suka semua foto-foto ini 🥰'
-        }
-      ]
-    ];
+    this.tvSlideDialogs = tvSlideshowConfig.map(item => item.dialogs);
   }
 
   // Setup callback untuk TV slide change
@@ -729,6 +936,10 @@ Selamat ulang tahun, ya.
       return; // Dialog sudah ditampilkan untuk slide ini
     }
 
+    // Clear pending advance dan reset flag ketika dialog baru dimulai
+    (window as any).pendingTVSlideAdvance = null;
+    this.tvSlideDialogJustCompleted = false;
+
     // Hapus dialog sebelumnya jika ada
     if (this.currentTVSlideDialog !== null) {
       // Dialog akan di-skip otomatis ketika slide berubah
@@ -747,10 +958,11 @@ Selamat ulang tahun, ya.
         // Store the slideIndex in a variable that won't change in the closure
         const currentSlideIndex = slideIndex;
         this.dialogSystem.startDialog(dialogs, () => {
-          // Dialog selesai, reset current slide dialog
+          // Dialog selesai, set flag bahwa TV slide dialog baru saja selesai
+          this.tvSlideDialogJustCompleted = true;
           this.currentTVSlideDialog = null;
           
-          // IMPORTANT: Auto-advance to next slide when dialog is completed (user tapped through)
+          // IMPORTANT: Set pending advance untuk next slide, akan dipanggil ketika user tap lagi
           // Only if slideshow is still open and there are more slides
           const isTVOpen = (window as any).isTVInteractionOpen;
           if (isTVOpen) {
@@ -767,27 +979,23 @@ Selamat ulang tahun, ya.
             // Check if there are more slides
             const totalSlides = this.tvSlideDialogs.length;
             if (actualCurrentIndex < totalSlides - 1) {
-              console.log('[StoryFlow] Dialog completed for slide', actualCurrentIndex, ', auto-advancing to next slide...');
+              const nextSlideIndex = actualCurrentIndex + 1;
+              console.log('[StoryFlow] Dialog completed for slide', actualCurrentIndex, ', will advance to next slide (', nextSlideIndex, ') on next tap...');
               
-              // Call next slide function if available (stored on window by MiniGamePage)
-              if ((window as any).tvNextSlide) {
-                (window as any).tvNextSlide();
-              } else {
-                // Fallback: directly call slideshow next
-                if (setup && setup.scene) {
-                  const tv = setup.scene.children.find((child: any) => child.userData && child.userData.type === 'tv');
-                  if (tv && tv.userData.slideshow && tv.userData.slideshow.next) {
-                    tv.userData.slideshow.next();
-                    // Also trigger dialog for next slide
-                    setTimeout(() => {
-                      this.showTVSlideDialog(actualCurrentIndex + 1);
-                    }, 100);
-                  }
-                }
-              }
+              // Set pending advance - akan dipanggil ketika user tap lagi di dialog system
+              // IMPORTANT: Set this even if dialog is still "active" (showing last message)
+              // The advance() method will check if dialog is not active before processing
+              (window as any).pendingTVSlideAdvance = nextSlideIndex;
             } else {
-              console.log('[StoryFlow] Dialog completed for last slide (', actualCurrentIndex, '), no auto-advance');
+              console.log('[StoryFlow] Dialog completed for last slide (', actualCurrentIndex, '), no more slides - dialog will close on next tap');
+              this.tvSlideDialogJustCompleted = false; // Reset flag if no more slides
+              (window as any).pendingTVSlideAdvance = null; // Clear pending advance
+              // IMPORTANT: Don't trigger afterMessages here - it will only be triggered when slideshow is closed
             }
+          } else {
+            // TV is closed, reset flag
+            this.tvSlideDialogJustCompleted = false;
+            (window as any).pendingTVSlideAdvance = null; // Clear pending advance
           }
         });
       }
@@ -821,16 +1029,13 @@ Selamat ulang tahun, ya.
         const afterMessages: DialogMessage[] = [
           {
             speaker: 'Giva',
-            text: 'Haha iyaaa! Aku masih inget, terus kamu malah mesen minuman yang gak kamu suka 😂'
+            text: 'Haha, apa apaan ini 😂'
           },
           {
             speaker: 'Erbe',
-            text: 'Tapi yang penting, hari itu kamu ketawa paling keras sepanjang minggu itu 😆'
+            text: 'Absurd dan cringe sih, tapi yang penting, mari tambah memori kita di tv plasma 99 inch ini ayang 😆'
           },
-          {
-            speaker: 'Giva',
-            text: 'Dan hari ini aku ketawa lebih keras lagi, gara-gara kamu 🥰'
-          }
+          
         ];
         
         this.startDialogWithAutoAdvance(afterMessages, () => {
@@ -930,7 +1135,8 @@ Selamat ulang tahun, ya.
       },
       {
         speaker: 'Erbe',
-        text: 'Tahu gak kenapa aku pilih lily? Karena artinya ketulusan dan kemurnian. Kayak kamu — yang selalu tulus sama semua orang, termasuk aku.'
+        text: 'Tahu gak kenapa aku pilih lily? Karena artinya ketulusan, kemurnian dan ketenangan. Aku berharap kisah kita seperti lily, yang melambangkan ketulusan dan ketenangan tanpa drama. Artinya: Bersama kamu, aku merasa aman dan tenang.'
+
       }
     ];
     
@@ -1019,6 +1225,27 @@ Selamat ulang tahun, ya.
     console.log('[StoryFlow] Camera focused on lily at', lilyPosition);
   }
 
+  // Make player face the cake
+  private facePlayerToCake() {
+    const playerRef = (window as any).playerRef;
+    const player = playerRef?.current || playerRef;
+    
+    if (!player) return;
+    
+    // Cake position: { x: -0.8, y: 0.45, z: 2 }
+    const cakePosition = { x: -0.8, y: 0.45, z: 2 };
+    
+    // Calculate angle from player to cake
+    const dx = cakePosition.x - player.position.x;
+    const dz = cakePosition.z - player.position.z;
+    const angle = Math.atan2(dx, dz);
+    
+    // Rotate player to face cake
+    player.rotation.y = angle;
+    
+    console.log('[StoryFlow] Player rotated to face cake, angle:', angle);
+  }
+
   // Focus camera on cake so it's clearly visible
   private focusCameraOnCake() {
     const cameraRef = (window as any).cameraRef;
@@ -1069,6 +1296,9 @@ Selamat ulang tahun, ya.
 
   // Interaction 4: Cake
   private interactCake() {
+    // Make Giva face the cake before dialog
+    this.facePlayerToCake();
+    
     // Adjust camera to focus on cake (so it's visible, not blocked by Giva)
     this.focusCameraOnCake();
     
@@ -1165,8 +1395,11 @@ Selamat ulang tahun, ya.
         (window as any).blowOutCandles();
       }
       
-      // Add confetti/hearts effect
+      // Add confetti/hearts effect (screen overlay)
       this.createCandleBlowEffect();
+      
+      // Add 3D love effect on cake
+      this.createCakeLoveEffect();
       
       // IMPORTANT: Make overlay non-interactive and lower z-index immediately so dialog can appear on top
       overlay.style.pointerEvents = 'none';
@@ -1207,7 +1440,7 @@ Selamat ulang tahun, ya.
     });
   }
 
-  // Create visual effect when candles are blown
+  // Create visual effect when candles are blown (screen overlay)
   private createCandleBlowEffect() {
     // Create floating hearts/confetti
     const heartCount = 15;
@@ -1243,6 +1476,131 @@ Selamat ulang tahun, ya.
         }
       }, 2000 + i * 50);
     }
+  }
+
+  // Create 3D love effect on cake (hearts spreading from cake)
+  private createCakeLoveEffect() {
+    const setup = (window as any).setupRef;
+    const THREE = (window as any).THREE;
+    
+    if (!setup || !setup.scene || !THREE) {
+      console.warn('[StoryFlow] Cannot create cake love effect: missing scene or THREE');
+      return;
+    }
+    
+    // Get cake position
+    const cakePosition = { x: -0.8, y: 0.45, z: 2 };
+    
+    // Create heart particles that spread from cake
+    const heartCount = 20;
+    const hearts: any[] = [];
+    
+    // Create canvas texture for heart emoji (reusable)
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.font = '96px Arial';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText('💕', 64, 64);
+    }
+    const heartTexture = new THREE.CanvasTexture(canvas);
+    heartTexture.needsUpdate = true;
+    
+    for (let i = 0; i < heartCount; i++) {
+      // Create sprite that always faces camera
+      const heartMaterial = new THREE.SpriteMaterial({
+        map: heartTexture,
+        transparent: true,
+        opacity: 0.9,
+        color: 0xFFFFFF
+      });
+      
+      const heart = new THREE.Sprite(heartMaterial);
+      heart.scale.set(0.15, 0.15, 1); // Size of heart sprite
+      
+      // Start position: slightly above cake
+      const startX = cakePosition.x + (Math.random() - 0.5) * 0.3;
+      const startY = cakePosition.y + 0.5 + Math.random() * 0.2;
+      const startZ = cakePosition.z + (Math.random() - 0.5) * 0.3;
+      
+      heart.position.set(startX, startY, startZ);
+      heart.userData.startTime = Date.now();
+      heart.userData.duration = 2000 + Math.random() * 1000; // 2-3 seconds
+      heart.userData.angle = Math.random() * Math.PI * 2;
+      heart.userData.distance = 0.5 + Math.random() * 0.8;
+      heart.userData.verticalSpeed = 0.1 + Math.random() * 0.15;
+      heart.userData.rotationSpeed = (Math.random() - 0.5) * 0.1;
+      
+      setup.scene.add(heart);
+      hearts.push(heart);
+    }
+    
+    // Store hearts for animation loop
+    if (!setup.scene.userData.cakeHearts) {
+      setup.scene.userData.cakeHearts = [];
+    }
+    setup.scene.userData.cakeHearts.push(...hearts);
+    
+    // Animate hearts in the main animation loop
+    // The animation will be handled by checking scene.userData.cakeHearts in the main loop
+    // For now, use a setTimeout-based animation
+    const animateHearts = () => {
+      const currentTime = Date.now();
+      const heartsToRemove: number[] = [];
+      
+      hearts.forEach((heart, index) => {
+        if (!heart.parent) {
+          heartsToRemove.push(index);
+          return; // Already removed
+        }
+        
+        const elapsed = currentTime - heart.userData.startTime;
+        const progress = elapsed / heart.userData.duration;
+        
+        if (progress >= 1) {
+          // Remove heart
+          setup.scene.remove(heart);
+          heart.material.dispose();
+          if (setup.scene.userData.cakeHearts) {
+            const idx = setup.scene.userData.cakeHearts.indexOf(heart);
+            if (idx > -1) {
+              setup.scene.userData.cakeHearts.splice(idx, 1);
+            }
+          }
+          heartsToRemove.push(index);
+          return;
+        }
+        
+        // Spread outward from cake
+        const spreadX = Math.cos(heart.userData.angle) * heart.userData.distance * progress;
+        const spreadZ = Math.sin(heart.userData.angle) * heart.userData.distance * progress;
+        const spreadY = heart.userData.verticalSpeed * progress;
+        
+        heart.position.x = cakePosition.x + spreadX;
+        heart.position.y = cakePosition.y + 0.5 + spreadY;
+        heart.position.z = cakePosition.z + spreadZ;
+        
+        // Fade out
+        heart.material.opacity = 0.9 * (1 - progress);
+        
+        // Rotate sprite
+        heart.rotation.z += heart.userData.rotationSpeed;
+      });
+      
+      // Remove hearts that are done (in reverse order to maintain indices)
+      heartsToRemove.reverse().forEach(idx => {
+        hearts.splice(idx, 1);
+      });
+      
+      if (hearts.length > 0) {
+        requestAnimationFrame(animateHearts);
+      }
+    };
+    
+    animateHearts();
   }
 
   // Interaction 5: Bed
@@ -1581,7 +1939,7 @@ Selamat ulang tahun, ya.
     // Import generateWhatsAppMessage dynamically
     import('./couponsUI').then(({ generateWhatsAppMessage }) => {
       const message = generateWhatsAppMessage(selectedCoupons);
-      const phoneNumber = '6281234567890'; // Replace with actual number
+      const phoneNumber = config.whatsappNumber; // Ambil dari config
       const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
       window.open(whatsappUrl, '_blank');
       

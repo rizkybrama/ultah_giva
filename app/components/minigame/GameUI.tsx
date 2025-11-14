@@ -26,12 +26,14 @@ export function InteractionModal({
 }: InteractionProps) {
   if (!interaction.show) return null;
 
-  // Get current slide image URL
+  // Get current slide
   const currentSlide = tvMediaItems[tvSlideIndex];
   const currentImageUrl = currentSlide && currentSlide.type === 'image' ? currentSlide.url : null;
+  const currentVideoUrl = currentSlide && currentSlide.type === 'video' ? currentSlide.url : null;
   const totalSlides = tvMediaItems.length;
   const canGoPrev = tvSlideIndex > 0;
   const canGoNext = tvSlideIndex < totalSlides - 1;
+  const hasContent = currentImageUrl || currentVideoUrl;
 
   // TV modal needs special fullscreen treatment
   if (interaction.type === 'tv' && interaction.show) {
@@ -50,30 +52,58 @@ export function InteractionModal({
           ×
         </button>
         
-        {/* Image container with navigation buttons - fullscreen */}
+        {/* Media container with navigation buttons - fullscreen */}
         <div className="relative w-full h-full" style={{ paddingBottom: '220px' }}>
-          {/* Image - full width, no blackspace on sides */}
-          {currentImageUrl ? (
+          {/* Media content - full width, no blackspace on sides */}
+          {hasContent ? (
             <div className="relative w-full h-full" style={{ height: 'calc(100vh - 220px)', overflow: 'hidden' }}>
-              <img 
-                src={currentImageUrl} 
-                alt={`Memory ${tvSlideIndex + 1}`}
-                className="w-full h-full object-cover"
-                style={{ width: '100%', height: '100%', objectPosition: 'center' }}
-                onError={(e) => {
-                  console.error('Failed to load image:', currentImageUrl);
-                  (e.target as HTMLImageElement).style.display = 'none';
-                  const parent = (e.target as HTMLImageElement).parentElement;
-                  if (parent) {
-                    const errorMsg = document.createElement('p');
-                    errorMsg.className = 'text-white text-center text-lg';
-                    errorMsg.textContent = `Failed to load image ${tvSlideIndex + 1}`;
-                    parent.appendChild(errorMsg);
-                  }
-                }}
-              />
+              {/* Image */}
+              {currentImageUrl && (
+                <img 
+                  src={currentImageUrl} 
+                  alt={`Memory ${tvSlideIndex + 1}`}
+                  className="w-full h-full object-cover"
+                  style={{ width: '100%', height: '100%', objectPosition: 'center' }}
+                  onError={(e) => {
+                    console.error('Failed to load image:', currentImageUrl);
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    const parent = (e.target as HTMLImageElement).parentElement;
+                    if (parent) {
+                      const errorMsg = document.createElement('p');
+                      errorMsg.className = 'text-white text-center text-lg';
+                      errorMsg.textContent = `Failed to load image ${tvSlideIndex + 1}`;
+                      parent.appendChild(errorMsg);
+                    }
+                  }}
+                />
+              )}
               
-              {/* Prev button - left side, vertically centered with image, close to image */}
+              {/* Video */}
+              {currentVideoUrl && (
+                <video
+                  src={currentVideoUrl}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover"
+                  style={{ width: '100%', height: '100%', objectPosition: 'center' }}
+                  onError={(e) => {
+                    console.error('Failed to load video:', currentVideoUrl);
+                    const video = e.target as HTMLVideoElement;
+                    video.style.display = 'none';
+                    const parent = video.parentElement;
+                    if (parent) {
+                      const errorMsg = document.createElement('p');
+                      errorMsg.className = 'text-white text-center text-lg';
+                      errorMsg.textContent = `Failed to load video ${tvSlideIndex + 1}`;
+                      parent.appendChild(errorMsg);
+                    }
+                  }}
+                />
+              )}
+              
+              {/* Prev button - left side, vertically centered, always visible */}
               <button
                 onClick={onPrevSlide}
                 disabled={!canGoPrev}
@@ -87,7 +117,7 @@ export function InteractionModal({
                 ←
               </button>
               
-              {/* Next button - right side, vertically centered with image, close to image */}
+              {/* Next button - right side, vertically centered, always visible */}
               <button
                 onClick={onNextSlide}
                 disabled={!canGoNext}
@@ -101,7 +131,7 @@ export function InteractionModal({
                 →
               </button>
               
-              {/* Slide counter - bottom center of image, with padding from image */}
+              {/* Slide counter - bottom center, always visible */}
               <div className="absolute bottom-4 md:bottom-6 left-1/2 transform -translate-x-1/2 z-20">
                 <span className="px-4 py-2 bg-black/70 text-white text-sm md:text-base rounded-full backdrop-blur-sm">
                   {totalSlides > 0 ? `${tvSlideIndex + 1} / ${totalSlides}` : '0 / 0'}
@@ -109,9 +139,48 @@ export function InteractionModal({
               </div>
             </div>
           ) : (
-            <p className="text-white text-center text-lg">
-              {totalSlides > 0 ? `Loading slide ${tvSlideIndex + 1}...` : 'No images available'}
-            </p>
+            <div className="relative w-full h-full flex items-center justify-center">
+              <p className="text-white text-center text-lg">
+                {totalSlides > 0 ? `Loading slide ${tvSlideIndex + 1}...` : 'No media available'}
+              </p>
+              
+              {/* Prev/Next buttons even when loading */}
+              {totalSlides > 0 && (
+                <>
+                  <button
+                    onClick={onPrevSlide}
+                    disabled={!canGoPrev}
+                    className={`absolute left-1 md:left-2 top-1/2 transform -translate-y-1/2 w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-3xl md:text-4xl font-bold z-20 transition-all ${
+                      canGoPrev 
+                        ? 'bg-white/90 hover:bg-white text-gray-800 cursor-pointer shadow-lg hover:scale-110' 
+                        : 'bg-gray-300/50 text-gray-400 cursor-not-allowed'
+                    }`}
+                    aria-label="Previous"
+                  >
+                    ←
+                  </button>
+                  
+                  <button
+                    onClick={onNextSlide}
+                    disabled={!canGoNext}
+                    className={`absolute right-1 md:right-2 top-1/2 transform -translate-y-1/2 w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-3xl md:text-4xl font-bold z-20 transition-all ${
+                      canGoNext 
+                        ? 'bg-white/90 hover:bg-white text-gray-800 cursor-pointer shadow-lg hover:scale-110' 
+                        : 'bg-gray-300/50 text-gray-400 cursor-not-allowed'
+                    }`}
+                    aria-label="Next"
+                  >
+                    →
+                  </button>
+                  
+                  <div className="absolute bottom-4 md:bottom-6 left-1/2 transform -translate-x-1/2 z-20">
+                    <span className="px-4 py-2 bg-black/70 text-white text-sm md:text-base rounded-full backdrop-blur-sm">
+                      {tvSlideIndex + 1} / {totalSlides}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>

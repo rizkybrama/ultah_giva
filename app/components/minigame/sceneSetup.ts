@@ -33,6 +33,10 @@ export interface SceneSetupResult {
 }
 
 export function createSceneSetup(canvas: HTMLCanvasElement, THREE: any): SceneSetupResult {
+  // Detect mobile device for performance optimization
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                   (window.innerWidth <= 768);
+  
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xDCEFE7); // Mint pastel background
   scene.fog = new THREE.Fog(0xDCEFE7, 10, 150); // Perpanjang fog sampai 150 unit agar elemen laut terlihat
@@ -49,22 +53,33 @@ export function createSceneSetup(canvas: HTMLCanvasElement, THREE: any): SceneSe
   camera.position.set(-1, 3.5, -12); // Farther away, higher up, to see door and house clearly
   camera.lookAt(-1, 1.5, -5.85); // Look directly at door center
 
-  // Renderer
+  // Renderer - Optimize for mobile
   const renderer = new THREE.WebGLRenderer({ 
     canvas: canvas,
-    antialias: true 
+    antialias: !isMobile, // Disable antialiasing on mobile for better performance
+    powerPreference: 'high-performance' // Prefer performance over quality
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
+  // Lower pixel ratio on mobile for better performance
+  renderer.setPixelRatio(isMobile ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = !isMobile; // Disable shadows on mobile for better performance
+  if (!isMobile) {
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Use soft shadows only on desktop
+  }
 
-  // Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  // Lighting - Optimize for mobile
+  const ambientLight = new THREE.AmbientLight(0xffffff, isMobile ? 0.8 : 0.6); // Brighter ambient on mobile to compensate for no shadows
   scene.add(ambientLight);
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, isMobile ? 0.4 : 0.8);
   directionalLight.position.set(10, 10, 5);
-  directionalLight.castShadow = true;
+  directionalLight.castShadow = !isMobile; // Disable shadow casting on mobile
+  if (!isMobile) {
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 50;
+  }
   scene.add(directionalLight);
 
   // Ground - Brown with green grass in garden area, beach sand in tree/mountain areas
@@ -79,7 +94,7 @@ export function createSceneSetup(canvas: HTMLCanvasElement, THREE: any): SceneSe
   const ground = new THREE.Mesh(groundGeometry, groundMaterial);
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = 0;
-  ground.receiveShadow = true;
+  ground.receiveShadow = !isMobile; // Disable shadows on mobile
   ground.renderOrder = 0;
   scene.add(ground);
 

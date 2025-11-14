@@ -1,6 +1,10 @@
 // Player character creation - creates a blocky character with connected body parts
 
 export function createPlayerCharacter(THREE: any, scene: any): any {
+  // Detect mobile for performance optimization
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                   (typeof window !== 'undefined' && window.innerWidth <= 768);
+  
   const playerGroup = new THREE.Group();
 
   // Body (torso) - Kemeja abu-abu gelap/hitam dengan kerah dan kancing
@@ -44,7 +48,7 @@ export function createPlayerCharacter(THREE: any, scene: any): any {
   playerGroup.add(collarRight);
   
   // Kancing putih (4 buah) di bagian depan kemeja - LEBIH BESAR dan LEBIH KE DEPAN agar JELAS TERLIHAT
-  const buttonGeometry = new THREE.SphereGeometry(0.03, 16, 16); // Lebih besar lagi agar jelas terlihat
+  const buttonGeometry = new THREE.SphereGeometry(0.03, isMobile ? 8 : 16, isMobile ? 8 : 16); // PERBESAR dari 0.03 ke 0.05 agar lebih terlihat
   const buttonMaterial = new THREE.MeshBasicMaterial({ 
     color: 0xFFFFFF, // Putih untuk kancing
     fog: false
@@ -52,26 +56,26 @@ export function createPlayerCharacter(THREE: any, scene: any): any {
   
   // Kancing 1 (teratas) - di bawah kerah, LEBIH KE DEPAN dari body front
   const button1 = new THREE.Mesh(buttonGeometry, buttonMaterial);
-  button1.position.set(0, 0.68, 0.15); // Lebih ke depan (z = 0.15, body front di z = 0.1)
+  button1.position.set(0, 0.68, 0.2); // Lebih ke depan (z = 0.2, body front di z = 0.1) agar tidak tertutup
   playerGroup.add(button1);
   
   // Kancing 2 - LEBIH KE DEPAN
   const button2 = new THREE.Mesh(buttonGeometry, buttonMaterial);
-  button2.position.set(0, 0.58, 0.15); // Lebih ke depan
+  button2.position.set(0, 0.50, 0.2); // Lebih ke depan agar tidak tertutup body front
   playerGroup.add(button2);
   
   // Kancing 3 - LEBIH KE DEPAN
   const button3 = new THREE.Mesh(buttonGeometry, buttonMaterial);
-  button3.position.set(0, 0.48, 0.15); // Lebih ke depan
+  button3.position.set(0, 0.32, 0.2); // Lebih ke depan agar tidak tertutup body front
   playerGroup.add(button3);
   
   // Kancing 4 (terbawah) - LEBIH KE DEPAN
   const button4 = new THREE.Mesh(buttonGeometry, buttonMaterial);
-  button4.position.set(0, 0.38, 0.15); // Lebih ke depan
+  button4.position.set(0, 0.14, 0.2); // Lebih ke depan agar tidak tertutup body front
   playerGroup.add(button4);
 
   // Head - BULAT (bukan kotak) menggunakan SphereGeometry
-  const headGeometry = new THREE.SphereGeometry(0.2, 16, 16); // Bulat dengan radius 0.2
+  const headGeometry = new THREE.SphereGeometry(0.2, isMobile ? 8 : 16, isMobile ? 8 : 16); // Bulat dengan radius 0.2
   const headMaterial = new THREE.MeshBasicMaterial({ 
     color: 0xFFDBB3, // Skin tone
     fog: false // Tidak terpengaruh fog
@@ -325,9 +329,9 @@ export function createPlayerCharacter(THREE: any, scene: any): any {
   rightShoeBack.userData.basePosition = { x: 0.15, y: shoeCenterY, z: -0.08 };
   playerGroup.add(rightShoeBack);
 
-  // Enable shadows
-  playerGroup.castShadow = true;
-  playerGroup.receiveShadow = true;
+  // Enable shadows (only on desktop)
+  playerGroup.castShadow = !isMobile;
+  playerGroup.receiveShadow = !isMobile;
 
   // Set initial position - OUTSIDE house, dari agak jauh
   // Camera di (-1, 3.5, -12), door di (-1, 1.5, -5.85)

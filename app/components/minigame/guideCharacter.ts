@@ -1,6 +1,10 @@
 // Guide character creation - creates a male character with glasses to guide Giva
 
 export function createGuideCharacter(THREE: any, scene: any): any {
+  // Detect mobile for performance optimization
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                   (typeof window !== 'undefined' && window.innerWidth <= 768);
+  
   const guideGroup = new THREE.Group();
 
   // Body (torso) - Kemeja untuk cowo
@@ -44,7 +48,7 @@ export function createGuideCharacter(THREE: any, scene: any): any {
   guideGroup.add(collarRight);
   
   // Kancing putih (4 buah) di bagian depan kemeja
-  const buttonGeometry = new THREE.SphereGeometry(0.03, 16, 16);
+  const buttonGeometry = new THREE.SphereGeometry(0.03, isMobile ? 8 : 16, isMobile ? 8 : 16);
   const buttonMaterial = new THREE.MeshBasicMaterial({ 
     color: 0xFFFFFF, // Putih untuk kancing
     fog: false
@@ -62,7 +66,7 @@ export function createGuideCharacter(THREE: any, scene: any): any {
   });
 
   // Head - Bulat untuk cowo
-  const headGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+  const headGeometry = new THREE.SphereGeometry(0.2, isMobile ? 8 : 16, isMobile ? 8 : 16);
   const headMaterial = new THREE.MeshBasicMaterial({ 
     color: 0xD4A574, // Tan skin untuk cowo
     fog: false
@@ -284,8 +288,8 @@ export function createGuideCharacter(THREE: any, scene: any): any {
   guideGroup.add(rightShoeBack);
 
   // Enable shadows
-  guideGroup.castShadow = true;
-  guideGroup.receiveShadow = true;
+  guideGroup.castShadow = !isMobile; // Disable shadows on mobile
+  guideGroup.receiveShadow = !isMobile;
 
   // Set initial position - Di luar rumah, bersampingan dengan Giva
   // Giva berada di (-1, 0.5, -9), Erbe akan berada di samping kiri Giva

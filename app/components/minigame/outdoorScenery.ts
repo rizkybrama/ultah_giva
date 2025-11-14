@@ -9,13 +9,17 @@ import {
 } from './validationHelpers';
 
 export function createOutdoorScenery(scene: any, THREE: any, collisionObjects: any[]) {
+  // Detect mobile for performance optimization
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                   (typeof window !== 'undefined' && window.innerWidth <= 768);
+  
   // Ground extension for garden - Diperbesar untuk area outdoor yang lebih luas
   // HAPUS gardenGround karena sudah ada main ground di sceneSetup
   // Tidak perlu duplicate ground yang bisa menyebabkan z-fighting/glitch
 
   // Beach sand in tree and mountain areas (far from house)
   // Create beach sand ground in areas where trees and mountains are (radius > 40 from center)
-  const beachSandGeometry = new THREE.RingGeometry(40, 120, 64);
+  const beachSandGeometry = new THREE.RingGeometry(40, 120, isMobile ? 32 : 64); // Reduce segments on mobile
   const beachSandMaterial = new THREE.MeshStandardMaterial({ 
     color: 0xF4A460, // Sandy beige/beach sand color
     roughness: 0.9,
@@ -24,7 +28,7 @@ export function createOutdoorScenery(scene: any, THREE: any, collisionObjects: a
   const beachSand = new THREE.Mesh(beachSandGeometry, beachSandMaterial);
   beachSand.rotation.x = -Math.PI / 2;
   beachSand.position.y = 0.005; // Slightly above main ground to avoid z-fighting
-  beachSand.receiveShadow = true;
+  beachSand.receiveShadow = !isMobile; // Disable shadows on mobile
   beachSand.renderOrder = 0.3; // Render between main ground and grass
   scene.add(beachSand);
 
@@ -57,7 +61,7 @@ export function createOutdoorScenery(scene: any, THREE: any, collisionObjects: a
     height: number,
     radius: number
   ): { mountain: any; glow?: any; particles?: any[]; update?: (time: number) => void } => {
-    const mountainGeometry = new THREE.ConeGeometry(radius, height, 8);
+    const mountainGeometry = new THREE.ConeGeometry(radius, height, isMobile ? 6 : 8); // Reduce segments on mobile
     
     let mountainMaterial: any;
     let glow: any = null;
@@ -79,7 +83,7 @@ export function createOutdoorScenery(scene: any, THREE: any, collisionObjects: a
       // Cone salju yang lebih kecil menempel di atas gunung base
       const snowCapHeight = height * 0.3; // Tinggi cap salju 30% dari tinggi gunung
       const snowCapRadius = radius * 0.5; // Radius cap salju 50% dari radius base
-      const snowCapGeometry = new THREE.ConeGeometry(snowCapRadius, snowCapHeight, 8);
+      const snowCapGeometry = new THREE.ConeGeometry(snowCapRadius, snowCapHeight, isMobile ? 6 : 8);
       const snowCapMaterial = new THREE.MeshStandardMaterial({ 
         color: 0xFFFFFF, // Pure white - warna salju terang mencolok
         roughness: 0.95,
@@ -598,7 +602,7 @@ export function createOutdoorScenery(scene: any, THREE: any, collisionObjects: a
   const oceanFloor = new THREE.Mesh(oceanFloorGeometry, oceanFloorMaterial);
   oceanFloor.rotation.x = -Math.PI / 2;
   oceanFloor.position.set(0, -oceanDepth, 0); // Di dasar laut
-  oceanFloor.receiveShadow = true;
+  oceanFloor.receiveShadow = !isMobile; // Disable shadows on mobile
   oceanFloor.renderOrder = 0; // Render di belakang
   scene.add(oceanFloor);
   
@@ -613,7 +617,7 @@ export function createOutdoorScenery(scene: any, THREE: any, collisionObjects: a
     
     // PENTING: Gunakan RingGeometry HANYA di area ocean, bukan PlaneGeometry yang besar
     // Ini mencegah water layer overlap dengan area daratan
-    const waterLayerGeometry = new THREE.RingGeometry(OCEAN_START_RADIUS, OCEAN_END_RADIUS, 32);
+    const waterLayerGeometry = new THREE.RingGeometry(OCEAN_START_RADIUS, OCEAN_END_RADIUS, isMobile ? 16 : 32);
     const waterLayerMaterial = new THREE.MeshStandardMaterial({
       color: 0x0099FF, // Biru ocean yang konsisten
       transparent: true,
@@ -633,7 +637,7 @@ export function createOutdoorScenery(scene: any, THREE: any, collisionObjects: a
   
   // Water surface - HARUS di atas ground untuk menghindari z-fighting
   // Gunakan opacity lebih tinggi dan warna lebih biru agar benar-benar terlihat biru dari atas
-  const waterSurfaceGeometry = new THREE.RingGeometry(OCEAN_START_RADIUS, OCEAN_END_RADIUS, 32);
+  const waterSurfaceGeometry = new THREE.RingGeometry(OCEAN_START_RADIUS, OCEAN_END_RADIUS, isMobile ? 16 : 32);
   const waterSurfaceMaterial = new THREE.MeshStandardMaterial({
     color: 0x0099FF, // Biru ocean yang lebih kuat dan jelas
     transparent: true,

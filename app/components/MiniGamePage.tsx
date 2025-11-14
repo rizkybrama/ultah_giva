@@ -9,14 +9,19 @@ import CouponsUI from './minigame/couponsUI';
 interface MiniGamePageProps {
   onExit: () => void;
   selectedCoupons?: Array<{ id: number; title: string; emoji: string }>;
+  musicEnabled?: boolean;
+  onMusicToggle?: (enabled: boolean) => void;
 }
 
-export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGamePageProps) {
+export default function MiniGamePage({ onExit, selectedCoupons = [], musicEnabled = true, onMusicToggle }: MiniGamePageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [isInside, setIsInside] = useState(false);
   const [reloadKey, setReloadKey] = useState(0); // Key untuk force reload scene
   const [isCutsceneMode, setIsCutsceneMode] = useState(true); // Cutscene mode by default
   const [showCouponsUI, setShowCouponsUI] = useState(false);
+  const [isReadingLetter, setIsReadingLetter] = useState(false); // Track if reading letter
+  const [currentMusicState, setCurrentMusicState] = useState<'romantic' | 'instru-sedi' | 'freeroam'>('romantic');
   
   // Keep ref in sync with state
   useEffect(() => {
@@ -55,6 +60,187 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
   const initialCameraSetRef = useRef(false);
   const isInsideRef = useRef(false); // Initialize to false (outside house)
   const walkAnimationTimeRef = useRef(0); // Time untuk animasi jalan
+
+  // Clean up all overlays (dialog, letter, lily, cake, sleep fade, etc.)
+  // Defined early so it can be used in useEffect cleanup
+  const cleanupAllOverlays = () => {
+    // Remove dialog UI
+    if ((window as any).dialogUIRef) {
+      (window as any).dialogUIRef.hide();
+    }
+    
+    // Remove letter overlay
+    const letterOverlays = document.querySelectorAll('[data-letter-overlay="true"]');
+    letterOverlays.forEach((overlay: any) => {
+      if (overlay.parentNode) {
+        document.body.removeChild(overlay);
+      }
+    });
+    
+    // Remove lily overlay
+    const lilyOverlays = document.querySelectorAll('[data-lily-overlay="true"]');
+    lilyOverlays.forEach((overlay: any) => {
+      if (overlay.parentNode) {
+        document.body.removeChild(overlay);
+      }
+    });
+    
+    // Remove cake blow overlay
+    const cakeOverlays = document.querySelectorAll('[data-cake-overlay="true"]');
+    cakeOverlays.forEach((overlay: any) => {
+      if (overlay.parentNode) {
+        document.body.removeChild(overlay);
+      }
+    });
+    
+    // Remove sleep fade overlay
+    const sleepFadeOverlays = document.querySelectorAll('[data-sleep-fade="true"]');
+    sleepFadeOverlays.forEach((overlay: any) => {
+      if (overlay.parentNode) {
+        document.body.removeChild(overlay);
+      }
+    });
+    (window as any).sleepFadeOverlay = null;
+    
+    // Remove TV interaction overlay
+    if ((window as any).isTVInteractionOpen) {
+      setInteraction({ type: null, show: false });
+      (window as any).isTVInteractionOpen = false;
+    }
+    
+    // Remove coupons UI
+    setShowCouponsUI(false);
+    
+    // Remove rest text overlay
+    const restTextOverlays = document.querySelectorAll('[data-rest-text="true"]');
+    restTextOverlays.forEach((overlay: any) => {
+      if (overlay.parentNode) {
+        document.body.removeChild(overlay);
+      }
+    });
+    
+    // Remove any other overlays with high z-index
+    const allOverlays = Array.from(document.querySelectorAll('div')).filter((el: any) => {
+      const zIndex = parseInt(window.getComputedStyle(el).zIndex) || 0;
+      return zIndex >= 2000 && el.style.position === 'fixed';
+    });
+    
+    allOverlays.forEach((overlay: any) => {
+      // Don't remove reload button or exit button
+      if (!overlay.closest('.absolute.top-4.right-4')) {
+        if (overlay.parentNode && overlay !== document.body) {
+          try {
+            document.body.removeChild(overlay);
+          } catch (e) {
+            // Ignore errors if already removed
+          }
+        }
+      }
+    });
+    
+    // Restore joystick/controls if hidden
+    const joystickElements = document.querySelectorAll('[data-hidden-by-overlay="true"]');
+    joystickElements.forEach((el: any) => {
+      if (el) {
+        el.style.display = '';
+        el.removeAttribute('data-hidden-by-overlay');
+      }
+    });
+  };
+
+  // Handle music based on game state and musicEnabled
+  useEffect(() => {
+    // Pause bg-sound when entering mini game
+    const bgSoundAudio = (window as any).bgSoundAudio;
+    if (bgSoundAudio && !bgSoundAudio.paused) {
+      bgSoundAudio.pause();
+    }
+    
+    if (!audioRef.current || !musicEnabled) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      return;
+    }
+
+    const audio = audioRef.current;
+    let musicFile = '/audio/romantic-music.mp3';
+
+    // Determine music based on game state
+    if (isCutsceneMode) {
+      if (isReadingLetter) {
+        musicFile = '/audio/instru-sedi.mp3';
+        setCurrentMusicState('instru-sedi');
+      } else {
+        musicFile = '/audio/romantic-music.mp3';
+        setCurrentMusicState('romantic');
+      }
+    } else {
+      // Free roam mode
+      musicFile = '/audio/freeroam.mp3';
+      setCurrentMusicState('freeroam');
+    }
+
+    // Only change music if it's different from current
+    const currentSrc = audio.src;
+    
+    // Check if music needs to change (compare paths, not full URLs)
+    if (!currentSrc.includes(musicFile)) {
+      audio.src = musicFile;
+      audio.loop = true;
+      audio.volume = 0.5;
+      audio.load();
+      audio.play().catch((err: any) => {
+        console.log('Audio play prevented:', err);
+      });
+    } else if (audio.paused) {
+      // Same music but paused, resume
+      audio.play().catch((err: any) => {
+        console.log('Audio play prevented:', err);
+      });
+    }
+  }, [musicEnabled, isCutsceneMode, isReadingLetter]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Pause mini game music (romantic-music/freeroam/instru-sedi)
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      
+      // Don't resume bg-sound here - let NewGamePage handle it
+      // This prevents timing issues and ensures bg-sound doesn't restart
+      
+      // Clean up all overlays when component unmounts
+      cleanupAllOverlays();
+      
+      // Cleanup dialog system
+      if ((window as any).dialogSystemRef) {
+        (window as any).dialogSystemRef.cleanup();
+      }
+      
+      // Remove any remaining overlays
+      const allPossibleOverlays = document.querySelectorAll(
+        '[data-letter-overlay="true"], ' +
+        '[data-lily-overlay="true"], ' +
+        '[data-cake-overlay="true"], ' +
+        '[data-sleep-fade="true"], ' +
+        '[data-rest-text="true"], ' +
+        '[data-tv-modal]'
+      );
+      
+      allPossibleOverlays.forEach((overlay: any) => {
+        try {
+          if (overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+          }
+        } catch (e) {
+          // Ignore errors
+        }
+      });
+    };
+  }, [musicEnabled]);
 
   // Initialize Three.js scene
   useEffect(() => {
@@ -200,6 +386,7 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
       // Store references for cutscene callbacks
       (window as any).setIsInside = setIsInside;
       (window as any).storyFlowRef = storyFlow; // Store storyFlow reference
+      (window as any).setIsReadingLetter = setIsReadingLetter; // Store setIsReadingLetter for storyFlow
       (window as any).showCouponsUI = (onComplete: (selectedCoupons: string[]) => void) => {
         setShowCouponsUI(true);
         (window as any).couponsOnComplete = onComplete;
@@ -256,23 +443,17 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
       if (interiorObjectsResult && interiorObjectsResult.tvSlideshow) {
         const tv = setup.scene.children.find((child: any) => child.userData && child.userData.type === 'tv');
         if (tv) {
-          // Store media items for modal
-          const mediaItems = [
-            { type: 'image' as const, url: '/images/giva-1.jpeg' },
-            { type: 'image' as const, url: '/images/giva-2.jpeg' },
-            { type: 'image' as const, url: '/images/giva-3.jpeg' },
-            { type: 'image' as const, url: '/images/giva-4.jpeg' },
-            { type: 'image' as const, url: '/images/giva-5.jpeg' },
-            { type: 'image' as const, url: '/images/giva-6.jpeg' },
-            { type: 'image' as const, url: '/images/giva-7.jpeg' },
-            { type: 'image' as const, url: '/images/giva-8.jpeg' },
-            { type: 'image' as const, url: '/images/giva-9.jpeg' },
-            { type: 'image' as const, url: '/images/giva-10.jpeg' },
-            { type: 'image' as const, url: '/images/giva-11.jpeg' }
-          ];
-          setTvMediaItems(mediaItems);
-          // Store media items on window for access from other modules
-          (window as any).tvMediaItems = mediaItems;
+          // Store media items for modal - menggunakan konfigurasi dari tvSlideshowConfig.ts
+          // Import akan dilakukan secara dinamis untuk menghindari circular dependency
+          import('./minigame/tvSlideshowConfig').then(({ tvSlideshowConfig }) => {
+            const mediaItems = tvSlideshowConfig.map(item => ({
+              type: item.type,
+              url: item.url
+            }));
+            setTvMediaItems(mediaItems);
+            // Store media items on window for access from other modules
+            (window as any).tvMediaItems = mediaItems;
+          });
           
           // Sync tvSlideIndex with slideshow current index
           if (tv.userData.slideshow) {
@@ -1098,110 +1279,101 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
     }
   };
 
-  // Handle dev reload - hanya muncul di development
-  const handleDevReload = () => {
-    // Clean up all overlays before reload
+  // Handle exit game with cleanup
+  const handleExitGame = () => {
+    // Clean up all overlays first
     cleanupAllOverlays();
     
-    // Force reload dengan mengubah key
-    setReloadKey(prev => prev + 1);
-  }
-
-  // Clean up all overlays (dialog, letter, lily, cake, sleep fade, etc.)
-  const cleanupAllOverlays = () => {
-    // Remove dialog UI
-    if ((window as any).dialogUIRef) {
-      (window as any).dialogUIRef.hide();
+    // Also cleanup dialog system
+    if ((window as any).dialogSystemRef) {
+      (window as any).dialogSystemRef.cleanup();
     }
     
-    // Remove letter overlay
-    const letterOverlays = document.querySelectorAll('[data-letter-overlay="true"]');
-    letterOverlays.forEach((overlay: any) => {
-      if (overlay.parentNode) {
-        document.body.removeChild(overlay);
-      }
-    });
+    // Clear interaction state
+    setInteraction({ type: null, show: false });
     
-    // Remove lily overlay
-    const lilyOverlays = document.querySelectorAll('[data-lily-overlay="true"]');
-    lilyOverlays.forEach((overlay: any) => {
-      if (overlay.parentNode) {
-        document.body.removeChild(overlay);
-      }
-    });
-    
-    // Remove cake blow overlay
-    const cakeOverlays = document.querySelectorAll('[data-cake-overlay="true"]');
-    cakeOverlays.forEach((overlay: any) => {
-      if (overlay.parentNode) {
-        document.body.removeChild(overlay);
-      }
-    });
-    
-    // Remove sleep fade overlay
-    const sleepFadeOverlays = document.querySelectorAll('[data-sleep-fade="true"]');
-    sleepFadeOverlays.forEach((overlay: any) => {
-      if (overlay.parentNode) {
-        document.body.removeChild(overlay);
-      }
-    });
-    (window as any).sleepFadeOverlay = null;
-    
-    // Remove TV interaction overlay
-    if ((window as any).isTVInteractionOpen) {
-      setInteraction({ type: null, show: false });
-      (window as any).isTVInteractionOpen = false;
-    }
-    
-    // Remove coupons UI
+    // Clear coupons UI
     setShowCouponsUI(false);
     
-    // Remove rest text overlay
-    const restTextOverlays = document.querySelectorAll('[data-rest-text="true"]');
-    restTextOverlays.forEach((overlay: any) => {
-      if (overlay.parentNode) {
-        document.body.removeChild(overlay);
+    // Remove any remaining overlays by checking for common overlay patterns
+    const allPossibleOverlays = document.querySelectorAll(
+      '[data-letter-overlay="true"], ' +
+      '[data-lily-overlay="true"], ' +
+      '[data-cake-overlay="true"], ' +
+      '[data-sleep-fade="true"], ' +
+      '[data-rest-text="true"], ' +
+      '[data-tv-modal], ' +
+      '.fixed.inset-0.bg-black'
+    );
+    
+    allPossibleOverlays.forEach((overlay: any) => {
+      try {
+        if (overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
+      } catch (e) {
+        // Ignore errors if already removed
       }
     });
     
-    // Remove any other overlays with high z-index
-    const allOverlays = Array.from(document.querySelectorAll('div')).filter((el: any) => {
-      const zIndex = parseInt(window.getComputedStyle(el).zIndex) || 0;
-      return zIndex >= 2000 && el.style.position === 'fixed';
+    // Remove dialog container if exists (created by dialogSystem)
+    // Dialog container is usually fixed at bottom with z-index 1000
+    const dialogContainers = Array.from(document.querySelectorAll('div')).filter((el: any) => {
+      const style = window.getComputedStyle(el);
+      const zIndex = parseInt(style.zIndex) || 0;
+      return (
+        style.position === 'fixed' &&
+        (zIndex === 1000 || zIndex >= 1000) &&
+        (el.style.bottom === '0px' || style.bottom === '0px')
+      );
     });
     
-    allOverlays.forEach((overlay: any) => {
-      // Don't remove reload button or exit button
-      if (!overlay.closest('.absolute.top-4.right-4')) {
-        if (overlay.parentNode && overlay !== document.body) {
-          try {
-            document.body.removeChild(overlay);
-          } catch (e) {
-            // Ignore errors if already removed
+    dialogContainers.forEach((container: any) => {
+      try {
+        if (container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    });
+    
+    // Also remove any elements with high z-index that might be overlays
+    const highZIndexElements = Array.from(document.querySelectorAll('div')).filter((el: any) => {
+      const style = window.getComputedStyle(el);
+      const zIndex = parseInt(style.zIndex) || 0;
+      return (
+        style.position === 'fixed' &&
+        zIndex >= 1000 &&
+        zIndex < 2000 // Exclude buttons which are at 2000
+      );
+    });
+    
+    highZIndexElements.forEach((el: any) => {
+      // Don't remove if it's part of the main game UI (buttons, etc)
+      if (!el.closest('.absolute.top-4.right-4') && !el.closest('[data-joystick]')) {
+        try {
+          if (el.parentNode) {
+            el.parentNode.removeChild(el);
           }
+        } catch (e) {
+          // Ignore errors
         }
       }
     });
     
-    // Restore joystick/controls if hidden
-    const joystickElements = document.querySelectorAll('[data-hidden-by-overlay="true"]');
-    joystickElements.forEach((el: any) => {
-      if (el) {
-        el.style.display = '';
-        el.removeAttribute('data-hidden-by-overlay');
-      }
-    });
+    // Call onExit after cleanup
+    onExit();
   };
+
 
   // Check if in development mode
   // Di Next.js, process.env.NODE_ENV akan di-replace pada build time
   // Untuk safety, kita juga cek apakah ada query parameter ?dev=true
-  const isDevelopment = 
-    (typeof window !== 'undefined' && window.location.search.includes('dev=true')) ||
-    (typeof process !== 'undefined' && process.env.NODE_ENV === 'development');
-
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-pastel-mint to-pastel-lavender" style={{ touchAction: 'none' }}>
+      {/* Hidden audio element for romantic-music */}
+      <audio ref={audioRef} loop />
       <canvas 
         ref={canvasRef} 
         className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"
@@ -1252,7 +1424,7 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
               yarn add three @types/three
             </code>
             <button
-              onClick={onExit}
+              onClick={handleExitGame}
               className="bg-gradient-to-r from-pastel-lavender to-pastel-pink text-white px-6 py-3 rounded-full font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
             >
               Go Back
@@ -1270,18 +1442,34 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
         </div> */}
 
         <div className="absolute top-4 right-4 flex gap-2 pointer-events-auto" style={{ zIndex: 2000 }}>
-          {isDevelopment && (
-            <button
-              onClick={handleDevReload}
-              className="glass-effect rounded-full px-4 py-2 text-xs font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 text-gray-700"
-              style={{ background: 'rgba(255, 255, 255, 0.9)' }}
-              title="Reload Scene (Dev Only)"
-            >
-              🔄 Reload
-            </button>
-          )}
+          {/* Music Toggle Button */}
           <button
-            onClick={onExit}
+            onClick={() => {
+              if (onMusicToggle) {
+                onMusicToggle(!musicEnabled);
+              }
+            }}
+            className="glass-effect rounded-full p-3 text-white font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 flex items-center justify-center"
+            style={{ 
+              background: musicEnabled ? 'rgba(251, 234, 236, 0.9)' : 'rgba(200, 200, 200, 0.7)',
+              width: '48px',
+              height: '48px'
+            }}
+            title={musicEnabled ? 'Music On' : 'Music Off'}
+          >
+            {musicEnabled ? (
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+              </svg>
+            )}
+          </button>
+          
+          <button
+            onClick={handleExitGame}
             className="glass-effect rounded-full px-6 py-3 text-white font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
             style={{ background: 'rgba(251, 234, 236, 0.9)' }}
           >
@@ -1393,11 +1581,17 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
           }}
         />
 
-        <div 
-          className="absolute bottom-6 left-6 pointer-events-auto md:hidden z-20"
-          ref={analogStickRef}
-          data-joystick="true"
-          style={{ touchAction: 'none' }}
+        {/* Joystick - only show in free roam mode, hide during cutscene */}
+        {!isCutsceneMode && (
+          <div 
+            className="absolute left-6 pointer-events-auto md:hidden z-20"
+            ref={analogStickRef}
+            style={{ 
+              bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)', 
+              touchAction: 'none',
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)'
+            }}
+            data-joystick="true"
           onTouchStart={(e) => {
             const touch = e.touches[0];
             const rect = analogStickRef.current?.getBoundingClientRect();
@@ -1454,6 +1648,7 @@ export default function MiniGamePage({ onExit, selectedCoupons = [] }: MiniGameP
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Coupons UI */}

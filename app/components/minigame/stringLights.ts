@@ -37,7 +37,10 @@ export function createStringLights(
       Math.pow(end.z - start.z, 2)
     );
     
-    const cableGeometry = new THREE.CylinderGeometry(0.005, 0.005, distance, 8);
+    // Detect mobile for performance optimization
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                     (typeof window !== 'undefined' && window.innerWidth <= 768);
+    const cableGeometry = new THREE.CylinderGeometry(0.005, 0.005, distance, isMobile ? 6 : 8);
     const cableMaterial = new THREE.MeshStandardMaterial({ 
       color: cableColor,
       emissive: warmWhite ? 0x444444 : 0x000000,
@@ -106,8 +109,10 @@ export function createStringLights(
     const bulbY = segmentStart.y + (segmentEnd.y - segmentStart.y) * segmentProgress;
     const bulbZ = segmentStart.z + (segmentEnd.z - segmentStart.z) * segmentProgress;
     
-    // Create bulb
-    const bulbGeometry = new THREE.SphereGeometry(bulbSize, 8, 8);
+    // Create bulb - reduce segments on mobile
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                     (typeof window !== 'undefined' && window.innerWidth <= 768);
+    const bulbGeometry = new THREE.SphereGeometry(bulbSize, isMobile ? 6 : 8, isMobile ? 6 : 8);
     const bulbMaterial = new THREE.MeshStandardMaterial({
       color: warmWhite ? 0xFFF8E1 : bulbColor,
       emissive: warmWhite ? 0xFFF8E1 : bulbColor,

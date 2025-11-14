@@ -145,6 +145,30 @@ export default function CountdownPage({ onNext, onAudioEnable }: CountdownPagePr
     setTransitionPhase('closing');
     onAudioEnable();
     
+    // Request fullscreen mode
+    const requestFullscreen = () => {
+      const element = document.documentElement;
+      if (element.requestFullscreen) {
+        element.requestFullscreen().catch((err) => {
+          console.log('Fullscreen request failed:', err);
+        });
+      } else if ((element as any).webkitRequestFullscreen) {
+        // Safari
+        (element as any).webkitRequestFullscreen();
+      } else if ((element as any).mozRequestFullScreen) {
+        // Firefox
+        (element as any).mozRequestFullScreen();
+      } else if ((element as any).msRequestFullscreen) {
+        // IE/Edge
+        (element as any).msRequestFullscreen();
+      }
+    };
+    
+    // Request fullscreen after a short delay to ensure transition starts
+    setTimeout(() => {
+      requestFullscreen();
+    }, 100);
+    
     // Setelah menutup, navigate ke halaman baru
     // Fase 2: Membuka (circle besar → kecil) akan terjadi di halaman baru via parent component
     setTimeout(() => {
