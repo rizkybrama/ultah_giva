@@ -1511,41 +1511,71 @@ export default function MiniGamePage({ onExit, selectedCoupons = [], musicEnable
             
             // IMPORTANT: Only call callback after slideshow is COMPLETELY closed
             // Use verification loop to ensure state is truly updated and slideshow is closed
-            let checkCount = 0;
-            const maxChecks = 20; // Check 20 times over 1 second
-            const checkInterval = setInterval(() => {
-              checkCount++;
-              const isTVOpen = (window as any).isTVInteractionOpen;
+            // Add delay to ensure React state update has propagated
+            setTimeout(() => {
+              let checkCount = 0;
+              const maxChecks = 20; // Check 20 times over 1 second
+              let consecutiveClosedChecks = 0;
+              const requiredClosedChecks = 5; // Require 5 consecutive checks (250ms) to ensure truly closed
               
-              // Verify slideshow is truly closed: flag must be false
-              // Also check if interaction modal is actually closed by checking DOM
-              const modalElement = document.querySelector('[data-tv-modal]') || 
-                                   document.querySelector('.fixed.inset-0.bg-black');
-              const isModalVisible = modalElement && 
-                                   window.getComputedStyle(modalElement as HTMLElement).display !== 'none';
-              
-              const isTrulyClosed = !isTVOpen && !isModalVisible;
-              
-              if (isTrulyClosed || checkCount >= maxChecks) {
-                clearInterval(checkInterval);
+              const checkInterval = setInterval(() => {
+                checkCount++;
+                const isTVOpen = (window as any).isTVInteractionOpen;
                 
-                // Final verification before calling callback
-                if (!(window as any).isTVInteractionOpen) {
-                  console.log('[MiniGamePage] TV slideshow confirmed closed after', checkCount * 50, 'ms, calling callback');
-                  // Call callback if waiting for slideshow close (story mode)
-                  if ((window as any).onTVSlideshowClose) {
-                    const callback = (window as any).onTVSlideshowClose;
-                    (window as any).onTVSlideshowClose = null;
-                    // Additional small delay to ensure everything is settled
-                    setTimeout(() => {
-                      callback();
-                    }, 100);
-                  }
+                // Verify slideshow is truly closed: flag must be false
+                // Also check if interaction modal is actually closed by checking DOM
+                const modalElement = document.querySelector('[data-tv-modal]');
+                const isModalVisible = modalElement && 
+                                     window.getComputedStyle(modalElement as HTMLElement).display !== 'none';
+                
+                // Check if truly closed
+                const isTrulyClosed = !isTVOpen && !isModalVisible;
+                
+                if (isTrulyClosed) {
+                  consecutiveClosedChecks++;
                 } else {
-                  console.warn('[MiniGamePage] TV slideshow still open after checks, not calling callback');
+                  // Reset counter if slideshow is still open (prev/next might cause temporary state changes)
+                  consecutiveClosedChecks = 0;
                 }
-              }
-            }, 50); // Check every 50ms
+                
+                // Only call callback if slideshow has been closed for required consecutive checks
+                // This prevents false positives during prev/next navigation
+                if (consecutiveClosedChecks >= requiredClosedChecks) {
+                  clearInterval(checkInterval);
+                  
+                  // Final verification before calling callback
+                  if (!(window as any).isTVInteractionOpen) {
+                    console.log('[MiniGamePage] TV slideshow confirmed closed after', consecutiveClosedChecks * 50, 'ms of consecutive closed checks, calling callback');
+                    // Call callback if waiting for slideshow close (story mode)
+                    if ((window as any).onTVSlideshowClose) {
+                      const callback = (window as any).onTVSlideshowClose;
+                      (window as any).onTVSlideshowClose = null;
+                      // Additional small delay to ensure everything is settled
+                      setTimeout(() => {
+                        callback();
+                      }, 100);
+                    }
+                  } else {
+                    console.warn('[MiniGamePage] TV slideshow still open after checks, not calling callback');
+                  }
+                } else if (checkCount >= maxChecks) {
+                  // Timeout fallback - only if slideshow is truly closed
+                  clearInterval(checkInterval);
+                  if (!(window as any).isTVInteractionOpen && !isModalVisible) {
+                    console.warn('[MiniGamePage] TV slideshow timeout, but appears closed, calling callback');
+                    if ((window as any).onTVSlideshowClose) {
+                      const callback = (window as any).onTVSlideshowClose;
+                      (window as any).onTVSlideshowClose = null;
+                      setTimeout(() => {
+                        callback();
+                      }, 100);
+                    }
+                  } else {
+                    console.warn('[MiniGamePage] TV slideshow timeout but still appears open, not calling callback');
+                  }
+                }
+              }, 50); // Check every 50ms
+            }, 200); // Initial delay to ensure state update
           }}
           onPrevSlide={() => {
             const newIndex = Math.max(0, tvSlideIndex - 1);

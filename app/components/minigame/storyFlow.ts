@@ -1082,40 +1082,9 @@ Luvyuu ayang, tetap hidup dan sehat terus sama aku selamanya, semoga kita bisa m
     }
     (window as any).onTVSlideshowClose = onClose;
     
-    // Also set up a check interval as fallback
-    let checkCount = 0;
-    const maxChecks = 600; // Max 60 seconds
-    let callbackCalled = false;
-    
-    const checkInterval = setInterval(() => {
-      checkCount++;
-      const isTVOpen = (window as any).isTVInteractionOpen;
-      
-      // IMPORTANT: Only call callback if TV is closed AND callback hasn't been called yet
-      // Also add a small delay after detecting closure to ensure it's truly closed
-      if (!isTVOpen && !callbackCalled) {
-        // Wait a bit more to ensure slideshow is truly closed (not just in transition)
-        if (checkCount >= 3) { // Wait at least 3 checks (300ms) after detecting closure
-          console.log('[StoryFlow] TV slideshow closed (detected by interval after verification), continuing flow...');
-          clearInterval(checkInterval);
-          callbackCalled = true;
-          if ((window as any).onTVSlideshowClose) {
-            const callback = (window as any).onTVSlideshowClose;
-            (window as any).onTVSlideshowClose = null;
-            callback();
-          }
-        }
-      } else if (checkCount >= maxChecks && !callbackCalled) {
-        console.warn('[StoryFlow] TV slideshow timeout, forcing continuation');
-        clearInterval(checkInterval);
-        callbackCalled = true;
-        if ((window as any).onTVSlideshowClose) {
-          const callback = (window as any).onTVSlideshowClose;
-          (window as any).onTVSlideshowClose = null;
-          callback();
-        }
-      }
-    }, 100);
+    // REMOVED: Check interval fallback that was causing false positives
+    // The callback will be called directly from MiniGamePage when user closes slideshow
+    // This prevents afterMessages from appearing during prev/next navigation
   }
 
   // Interaction 3: Lily
