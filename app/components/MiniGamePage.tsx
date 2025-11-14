@@ -203,10 +203,11 @@ export default function MiniGamePage({ onExit, selectedCoupons = [], musicEnable
 
   // Cleanup on unmount
   useEffect(() => {
+    const audio = audioRef.current;
     return () => {
       // Pause mini game music (romantic-music/freeroam/instru-sedi)
-      if (audioRef.current) {
-        audioRef.current.pause();
+      if (audio) {
+        audio.pause();
       }
       
       // Don't resume bg-sound here - let NewGamePage handle it
@@ -1184,7 +1185,8 @@ export default function MiniGamePage({ onExit, selectedCoupons = [], musicEnable
       playerControlsRef.current = null;
       collisionObjectsRef.current = [];
     };
-  }, [reloadKey]); // Re-run when reloadKey changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]); // Re-run when reloadKey changes (selectedCoupons, isInside, tvMediaItems are used but intentionally not in deps)
 
   // Interior objects are now added during scene setup, no need for separate useEffect
 

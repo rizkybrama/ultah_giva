@@ -48,7 +48,8 @@ export default function CountdownPage({ onNext, onAudioEnable }: CountdownPagePr
       console.error('Invalid birthday date:', error);
       return new Date(); // fallback
     }
-  }, [config.birthdayDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Format tanggal Indonesia
   const formatBirthdayDate = useMemo(() => {
@@ -308,6 +309,7 @@ export default function CountdownPage({ onNext, onAudioEnable }: CountdownPagePr
                   {isTimeReached ? config.countdownAvatar.emojiCelebration : config.countdownAvatar.emojiWaiting}
                 </div>
               ) : (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img 
                   src={config.countdownAvatar.imagePath} 
                   alt="Sticker animasi" 

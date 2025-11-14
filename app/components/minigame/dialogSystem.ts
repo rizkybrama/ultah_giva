@@ -422,7 +422,7 @@ export function createDialogUI(guideCharacter?: any, camera?: any, playerCharact
   // Prevent text selection during scroll
   textContainer.style.userSelect = 'none';
   // Pastikan text container bisa scroll dengan baik - OPTIMIZED untuk instant scroll
-  textContainer.style.webkitOverflowScrolling = 'touch'; // Smooth scroll di iOS
+  (textContainer.style as any).webkitOverflowScrolling = 'touch'; // Smooth scroll di iOS
   textContainer.style.touchAction = 'pan-y'; // Allow vertical scroll - CRITICAL untuk instant scroll
   textContainer.style.willChange = 'scroll-position'; // Optimize for scrolling
   textContainer.style.transform = 'translateZ(0)'; // Force hardware acceleration

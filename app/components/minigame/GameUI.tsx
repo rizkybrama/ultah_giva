@@ -59,6 +59,7 @@ export function InteractionModal({
             <div className="relative w-full h-full" style={{ height: 'calc(100vh - 220px)', overflow: 'hidden' }}>
               {/* Image */}
               {currentImageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img 
                   src={currentImageUrl} 
                   alt={`Memory ${tvSlideIndex + 1}`}

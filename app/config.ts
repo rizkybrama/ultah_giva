@@ -6,7 +6,7 @@ export const config = {
   girlfriendName: 'Oliffia Larensza Geovani',
   
   // Tanggal ulang tahun (format: YYYY-MM-DD, timezone WIB)
-  birthdayDate: '2025-11-05T00:00:00+07:00', // 5 November 2025
+  birthdayDate: '2025-11-14T00:00:00+07:00', // 5 November 2025
   
   // Pesan romantis di halaman akhir
   finalMessage: {

@@ -15,7 +15,8 @@ export default function MoodStormPage({ onTryAgain }: MoodStormPageProps) {
       setCurrentEmoji((prev) => (prev + 1) % emojis.length);
     }, 1500);
     return () => clearInterval(interval);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // emojis is a constant array, no need to include in deps
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-300 via-purple-300 to-pink-400 flex flex-col items-center justify-center relative page-transition" style={{ paddingBottom: '2rem' }}>
